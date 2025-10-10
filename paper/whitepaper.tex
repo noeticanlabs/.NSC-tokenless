@@ -1,0 +1,66 @@
+\documentclass{article}
+
+% --- Document Setup ---
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+% --- Title and Author ---
+\title{Noetica Physics: A Resonant Field Theory (RFT) \\ \large White Paper Thesis v3.0}
+\author{Mikey + GPT Research Group}
+\date{2025-10-08}
+
+% --- Document Begins ---
+\begin{document}
+
+\maketitle
+
+% --- Abstract ---
+\begin{abstract}
+Noetica Physics (Resonant Field Theory, RFT) proposes that the fundamental architecture of the universe is \textbf{resonant rather than particulate}---a continuous field of coupled oscillations whose geometry determines observable matter, energy, and information. The theory reformulates physical interactions as \textit{phase relations} within a harmonic manifold. Where General Relativity describes curvature of spacetime and Quantum Mechanics quantizes energy states, RFT treats \textbf{phase coherence} as the unifying variable linking both domains. It directly addresses the long-standing paradox between relativity’s smooth, deterministic spacetime and quantum mechanics’ probabilistic, discontinuous nature. RFT posits that these conflicting pictures emerge from different limits of the same resonant substrate---curvature and coherence as dual expressions of one field. The central claim: \textit{all fields---gravitational, electromagnetic, quantum, or informational---are expressions of a universal phase field whose curvature encodes energy and whose coherence encodes order.}
+\end{abstract}
+
+% --- Appendix D: Formal Derivation ---
+\appendix
+% Shortened section title to prevent overfull hbox warning.
+\section{Derivation of the Euler–Lagrange Equations (RFT)}
+
+\paragraph{Conventions.} Spacetime is a smooth 3+1D manifold with metric \(g_{\mu\nu}\) (signature \((+,-,-,-))\), Levi–Civita tensor \(\varepsilon^{\mu\nu\rho\sigma}\) with \(\varepsilon^{0123}=+1\), and covariant derivative \(\nabla_\mu\). Natural units (\(\hbar=c=1\)). Indices are raised with \(g^{\mu\nu}\). Define the dual field strength \(\tilde{F}^{\mu\nu} := \frac{1}{2} \varepsilon^{\mu\nu\rho\sigma}F_{\rho\sigma}\).
+
+\subsection{Fields and Lagrangian}
+\paragraph{Fields.} Phase \(\theta(x) \in S^1\); gauge potential \(A_\mu(x)\); field strength \(F_{\mu\nu} := \partial_\mu A_\nu - \partial_\nu A_\mu\); covariant phase gradient \(D_\mu\theta := \partial_\mu\theta - A_\mu\). Stiffness tensor \(K^{\mu\nu}(x)\) is symmetric positive-definite.
+
+\paragraph{Action.}
+\begin{equation}
+S[\theta, A] = \int d^4x \sqrt{|g|} \mathcal{L}_{\text{RFT}},
+\end{equation}
+where
+\begin{equation}
+\mathcal{L}_{\text{RFT}} = \frac{\kappa_1}{2} D_\mu\theta K^{\mu\nu} D_\nu\theta - \frac{\kappa_2}{4} F_{\mu\nu}F^{\mu\nu} - V(\theta) + J^\mu D_\mu\theta + \frac{\alpha}{8\pi}\theta F_{\mu\nu}\tilde{F}^{\mu\nu}.
+\end{equation}
+
+% Using \texorpdfstring to provide a text-only version for PDF bookmarks, fixing hyperref warnings.
+\subsection{Variation with respect to \texorpdfstring{\(\theta\)}{theta}}
+Using \(\delta D_\mu\theta = \partial_\mu\delta\theta\) and integrating by parts, the variation of the action is:
+\begin{equation}
+\delta S_\theta = \int d^4x \sqrt{|g|} \delta\theta \left\{ -\nabla_\nu(\kappa_1 K^{\nu\mu}D_\mu\theta + J^\nu) - \frac{\partial V}{\partial\theta} + \frac{\alpha}{8\pi}F_{\mu\nu}\tilde{F}^{\mu\nu} \right\}.
+\end{equation}
+This yields the \textbf{Phase Equation (Euler-Lagrange)}:
+\begin{equation}
+\nabla_\nu(\kappa_1 K^{\nu\mu}D_\mu\theta + J^\nu) + \frac{\partial V}{\partial\theta} = \frac{\alpha}{8\pi}F_{\mu\nu}\tilde{F}^{\mu\nu}.
+\end{equation}
+
+% Using \texorpdfstring to provide a text-only version for PDF bookmarks, fixing hyperref warnings.
+\subsection{Variation with respect to \texorpdfstring{\(A_\mu\)}{A_mu}}
+With \(\delta D_\mu\theta = -\delta A_\mu\) and \(\delta F_{\mu\nu} = \nabla_\mu\delta A_\nu - \nabla_\nu\delta A_\mu\), integrating by parts gives:
+\begin{equation}
+\delta S_A = \int d^4x \sqrt{|g|} \delta A_\mu \left\{ \kappa_2\nabla_\nu F^{\nu\mu} - \kappa_1 K^{\mu\nu}D_\nu\theta - J^\mu - \frac{\alpha}{2\pi}(\partial_\nu\theta) \tilde{F}^{\nu\mu} \right\}.
+\end{equation}
+This yields the \textbf{Gauge Equation (Euler-Lagrange)}:
+\begin{equation}
+\nabla_\nu F^{\nu\mu} = \frac{1}{\kappa_2} \left( \kappa_1 K^{\mu\nu}D_\nu\theta + J^\mu + \frac{\alpha}{2\pi} (\partial_\nu\theta) \tilde{F}^{\nu\mu} \right).
+\end{equation}
+
+
+\end{document}

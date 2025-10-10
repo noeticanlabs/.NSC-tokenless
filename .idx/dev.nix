@@ -1,53 +1,61 @@
-# To learn more about how to use Nix to configure your environment
-# see: https://developers.google.com/idx/guides/customize-idx-env
-{ pkgs, ... }: {
-  # Which nixpkgs channel to use.
-  channel = "stable-24.05"; # or "unstable"
-  # Use https://search.nixos.org/packages to find packages
+{ pkgs, ... }:
+let
+  # Per the airules.md, we are defining a reproducible Nix-based environment.
+  # This `let` block creates a custom Python environment containing all
+  # necessary packages for the project. This is a more robust and declarative
+  # approach than using pip.
+  pythonWithPackages = pkgs.python3.withPackages (ps: with ps; [
+    flask
+    numpy
+    scipy
+    matplotlib
+  ]);
+in
+{
+  # The packages list makes the Python environment and LaTeX available in the workspace.
   packages = [
-    # pkgs.go
-    # pkgs.python311
-    # pkgs.python311Packages.pip
-    # pkgs.nodejs_20
-    # pkgs.nodePackages.nodemon
+    pythonWithPackages
+    pkgs.texlive.combined.scheme-small
   ];
-  # Sets environment variables in the workspace
-  env = {};
+
+  # The idx section configures the Firebase Studio workspace.
   idx = {
-    # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
+    # Install the recommended Python extension for VS Code.
     extensions = [
-      # "vscodevim.vim"
-      "google.gemini-cli-vscode-ide-companion"
+      "ms-python.python"
+      "james-yu.latex-workshop"
     ];
-    # Enable previews
+
+    # Workspace lifecycle hooks, as described in airules.md.
+    workspace = {
+      # The onStart hook runs a command every time the workspace is started.
+      onStart = {
+        # This command starts the Flask server for the simulation.py app.
+        # It uses the $PORT environment variable for dynamic port assignment.
+        start-server = "${pythonWithPackages}/bin/python -m flask --app simulation.py run --host=0.0.0.0 --port=$PORT";
+      };
+    };
+
+    # The previews section configures the web preview for the application.
     previews = {
       enable = true;
       previews = {
-        # web = {
-        #   # Example: run "npm run dev" with PORT set to IDX's defined port for previews,
-        #   # and show it in IDX's web preview panel
-        #   command = ["npm" "run" "dev"];
-        #   manager = "web";
-        #   env = {
-        #     # Environment variables to set for your server
-        #     PORT = "$PORT";
-        #   };
-        # };
-      };
-    };
-    # Workspace lifecycle hooks
-    workspace = {
-      # Runs when a workspace is first created
-      onCreate = {
-        # Example: install JS dependencies from NPM
-        # npm-install = "npm install";
-        # Open editors for the following files by default, if they exist:
-        default.openFiles = [ ".idx/dev.nix" "README.md" ];
-      };
-      # Runs when the workspace is (re)started
-      onStart = {
-        # Example: start a background task to watch and re-build backend code
-        # watch-backend = "npm run watch-backend";
+        web = {
+          # The command to start the web preview. This must be a list of strings.
+          command = [
+            "${pythonWithPackages}/bin/python"
+            "-m"
+            "flask"
+            "--app"
+            "simulation.py"
+            "run"
+            "--host=0.0.0.0"
+            "--port=$PORT"
+          ];
+
+          # The 'manager = "web"' property is required by the build system for web previews.
+          manager = "web";
+        };
       };
     };
   };
