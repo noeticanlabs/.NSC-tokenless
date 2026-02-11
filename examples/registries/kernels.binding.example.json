@@ -1,0 +1,12 @@
+{
+  "registry_id": "noetican.nsc.registry.v1_1",
+  "binding_id": "binding.demo.v1",
+  "bindings": [
+    { "op_id": 10, "kernel_id": "kern.source_plus.v1", "kernel_version": "1.0.0" },
+    { "op_id": 11, "kernel_id": "kern.twist.v1", "kernel_version": "1.0.0" },
+    { "op_id": 12, "kernel_id": "kern.delta.v1", "kernel_version": "1.0.0" },
+    { "op_id": 13, "kernel_id": "kern.regulate.v1", "kernel_version": "1.0.0" },
+    { "op_id": 14, "kernel_id": "kern.sink_minus.v1", "kernel_version": "1.0.0" },
+    { "op_id": 20, "kernel_id": "kern.return_baseline.linear_blend", "kernel_version": "1.0.0" }
+  ]
+}

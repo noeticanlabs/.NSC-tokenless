@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NSC ReplayReport",
+  "type": "object",
+  "required": ["replay_pass", "module_digest_ok", "registry_ok", "kernel_binding_ok", "tolerances"],
+  "properties": {
+    "replay_pass": { "type": "boolean" },
+    "module_digest_ok": { "type": "boolean" },
+    "registry_ok": { "type": "boolean" },
+    "kernel_binding_ok": { "type": "boolean" },
+    "tolerances": {
+      "type": "object",
+      "required": ["abs", "rel"],
+      "properties": {
+        "abs": { "type": "number", "minimum": 0 },
+        "rel": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "first_mismatch": {
+      "type": "object",
+      "required": ["event_id", "field", "expected", "observed"],
+      "properties": {
+        "event_id": { "type": "string", "minLength": 1 },
+        "field": { "type": "string", "minLength": 1 },
+        "expected": {},
+        "observed": {}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

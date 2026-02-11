@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NSC Module Digest",
+  "type": "object",
+  "required": ["module_id", "registry_id", "digest_alg", "canonical_profile", "digest"],
+  "properties": {
+    "module_id": { "type": "string", "minLength": 1 },
+    "registry_id": { "type": "string", "minLength": 1 },
+    "digest_alg": { "type": "string", "enum": ["sha256"] },
+    "canonical_profile": { "type": "string", "enum": ["canonical-json-v1"] },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "additionalProperties": false
+}

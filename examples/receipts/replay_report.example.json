@@ -1,0 +1,7 @@
+{
+  "replay_pass": true,
+  "module_digest_ok": true,
+  "registry_ok": true,
+  "kernel_binding_ok": true,
+  "tolerances": { "abs": 1e-9, "rel": 1e-9 }
+}
