@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BraidEvent",
+  "type": "object",
+  "required": ["run_id","event_id","thread_id","step_index","kind","payload","parents","digest"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "event_id": { "type": "string" },
+    "thread_id": { "type": "string", "enum": ["micro","step","macro","io","audit"] },
+    "step_index": { "type": "integer", "minimum": 0 },
+    "kind": { "type": "string" },
+    "payload": { "type": "object", "additionalProperties": true },
+    "parents": { "type": "array", "items": { "type": "string" } },
+    "digest": { "type": "string" }
+  },
+  "additionalProperties": true
+}

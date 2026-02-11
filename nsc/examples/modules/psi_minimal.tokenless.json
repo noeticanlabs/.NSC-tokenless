@@ -1,0 +1,23 @@
+{
+  "module_id": "psi_minimal",
+  "registry_id": "noetican.nsc.registry.v1",
+  "types": {
+    "t_field_scalar": { "tag": "FIELD", "of": { "tag": "SCALAR" } }
+  },
+  "nodes": [
+    { "id": 1, "kind": "FIELD_REF", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "field_id": 1 },
+    { "id": 2, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 10, "args": [1] },
+    { "id": 3, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 11, "args": [2] },
+    { "id": 4, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 12, "args": [3] },
+    { "id": 5, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 13, "args": [4] },
+    { "id": 6, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 14, "args": [5] },
+    { "id": 7, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 20, "args": [6, 1] },
+    { "id": 99, "kind": "SEQ", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "seq": [1,2,3,4,5,6,7] }
+  ],
+  "entrypoints": { "Psi": 7 },
+  "order": { "eval_seq_id": 99 },
+  "meta": {
+    "field_env": { "1": "phi" },
+    "note": "Tokenless: op_id only; strings are metadata."
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OperatorReceipt",
+  "type": "object",
+  "required": ["run_id","event_id","thread_id","step_index","kind","op_id","kernel","digests","delta","digest"],
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1 },
+    "event_id": { "type": "string", "minLength": 1 },
+    "thread_id": { "type": "string", "enum": ["micro","step","macro","io","audit"] },
+    "step_index": { "type": "integer", "minimum": 0 },
+    "kind": { "type": "string", "enum": ["op_apply","op_ref","coupling_apply","frame_event"] },
+
+    "op_id": { "type": "integer", "minimum": 1 },
+    "kernel": {
+      "type": "object",
+      "required": ["kernel_id","kernel_version"],
+      "properties": {
+        "kernel_id": { "type": "string", "minLength": 1 },
+        "kernel_version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+
+    "digests": {
+      "type": "object",
+      "required": ["digest_out"],
+      "properties": {
+        "digest_in": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } }
+          ]
+        },
+        "digest_out": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+
+    "delta": {
+      "type": "object",
+      "required": ["C_before","C_after","dC","r_before","r_after"],
+      "properties": {
+        "C_before": { "type": "number", "minimum": 0, "maximum": 1 },
+        "C_after": { "type": "number", "minimum": 0, "maximum": 1 },
+        "dC": { "type": "number" },
+        "r_before": { "type": "object", "additionalProperties": true },
+        "r_after": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": true
+    },
+
+    "params": { "type": "object", "additionalProperties": true },
+    "resources": { "type": "object", "additionalProperties": true },
+
+    "parents": { "type": "array", "items": { "type": "string" } },
+    "digest": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}

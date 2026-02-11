@@ -1,0 +1,22 @@
+{
+  "module_id": "psi_governed",
+  "registry_id": "noetican.nsc.registry.v1",
+  "types": {},
+  "nodes": [
+    { "id": 1, "kind": "FIELD_REF", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "field_id": 1 },
+    { "id": 2, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 10, "args": [1] },
+    { "id": 3, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 11, "args": [2] },
+    { "id": 4, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 12, "args": [3] },
+    { "id": 5, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 13, "args": [4] },
+    { "id": 6, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 14, "args": [5] },
+    { "id": 7, "kind": "APPLY", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "op_id": 20, "args": [6, 1] },
+    { "id": 20, "kind": "GATE_CHECK", "type": { "tag": "REPORT", "kind": "GATE_REPORT" }, "gate_id": 1, "snapshot": 7 },
+    { "id": 30, "kind": "GOVERN", "type": { "tag": "ACTION_PLAN" }, "history": 9001, "reports": [20] },
+    { "id": 40, "kind": "EMIT", "type": { "tag": "REPORT", "kind": "EVENT" }, "emit_kind": "gate_report", "payload_ref": 20 },
+    { "id": 41, "kind": "EMIT", "type": { "tag": "REPORT", "kind": "EVENT" }, "emit_kind": "action_plan", "payload_ref": 30 },
+    { "id": 99, "kind": "SEQ", "type": { "tag": "FIELD", "of": { "tag": "SCALAR" } }, "seq": [1,2,3,4,5,6,7,20,30,40,41] }
+  ],
+  "entrypoints": { "Psi": 7, "GateReport": 20, "ActionPlan": 30 },
+  "order": { "eval_seq_id": 99 },
+  "meta": { "field_env": { "1": "phi" } }
+}

@@ -90,6 +90,31 @@ Additional demos: power balance, gauge continuity, Kelvin mode analysis.
 
 ---
 
+### NSC Tokenless v1.0 — Executable Specification
+
+This workspace now includes **NSC Tokenless v1.0**, the executable layer for Noetican computation. NSC provides a deterministic, auditable, tokenless intermediate language for governed computation.
+
+**Key Features:**
+- Tokenless execution (no textual tokens required for parsing)
+- Deterministic evaluation order via explicit SEQ nodes
+- Typed operator application (no implicit coercions)
+- Mandatory gate hooks + governance decisions
+- Mandatory receipts and braid events (audit trail)
+
+**Location:** [`nsc/` directory](nsc/)
+
+**Quick Links:**
+- [NSC README](nsc/README.md) — Overview and navigation
+- [NSC Index](nsc/docs/index.md) — All specification documents
+- [Core Model](nsc/docs/nsc_core_model.md) — Module, nodes, evaluation
+- [Operator Registry](nsc/docs/nsc_operator_registry.md) — Operator definitions
+- [Schemas](nsc/schemas/) — JSON Schema definitions (normative)
+- [Examples](nsc/examples/) — Executable example modules
+
+**Validation:** All JSON examples have been validated as syntactically correct.
+
+---
+
 ### Part VI — Revision Log
 
 | Date       | Version | Section | Change Type   | Summary                                                                       |

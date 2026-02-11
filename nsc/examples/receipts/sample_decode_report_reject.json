@@ -1,0 +1,11 @@
+{
+  "n": 16,
+  "chosen": { "kind": "REJECT", "control_row_id": 0 },
+  "topk": [
+    { "glyph_id": "GLYPH.SOURCE_PLUS", "score": 0.31 },
+    { "glyph_id": "GLYPH.TWIST", "score": 0.29 },
+    { "glyph_id": "GLYPH.DELTA", "score": 0.28 }
+  ],
+  "thresholds": { "tau_abs": 0.60, "tau_margin": 0.10 },
+  "margin": 0.02
+}

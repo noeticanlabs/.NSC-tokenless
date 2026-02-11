@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ModuleDigest",
+  "type": "object",
+  "required": ["algorithm","value"],
+  "properties": {
+    "algorithm": { "type": "string", "enum": ["sha256"] },
+    "value": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "canonical_form": { "type": "string" }
+  },
+  "additionalProperties": false
+}

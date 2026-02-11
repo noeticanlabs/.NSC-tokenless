@@ -1,0 +1,81 @@
+{
+  "registry_id": "noetican.nsc.registry.v1",
+  "version": "1.0.0",
+  "ops": [
+    {
+      "op_id": 10,
+      "token": "source_plus",
+      "type_signature": {
+        "args": [{ "tag": "FIELD", "of": { "tag": "SCALAR" } }],
+        "ret": { "tag": "FIELD", "of": { "tag": "SCALAR" } }
+      },
+      "lowering_id": "nsc.apply.source_plus",
+      "resonance_projection_id": "res.op.source_plus",
+      "receipt_metrics": ["kernel_id","kernel_version","digest_in","digest_out","C_before","C_after","r_before","r_after","injection"],
+      "kernel_policy": { "requires_kernel_id": true, "requires_kernel_version": true }
+    },
+    {
+      "op_id": 11,
+      "token": "curvature_twist",
+      "type_signature": {
+        "args": [{ "tag": "FIELD", "of": { "tag": "SCALAR" } }],
+        "ret": { "tag": "FIELD", "of": { "tag": "SCALAR" } }
+      },
+      "lowering_id": "nsc.apply.curvature_twist",
+      "resonance_projection_id": "res.op.twist",
+      "receipt_metrics": ["kernel_id","kernel_version","digest_in","digest_out","C_before","C_after","r_before","r_after","geometry"],
+      "kernel_policy": { "requires_kernel_id": true, "requires_kernel_version": true }
+    },
+    {
+      "op_id": 12,
+      "token": "delta_transform",
+      "type_signature": {
+        "args": [{ "tag": "FIELD", "of": { "tag": "SCALAR" } }],
+        "ret": { "tag": "FIELD", "of": { "tag": "SCALAR" } }
+      },
+      "lowering_id": "nsc.apply.delta_transform",
+      "resonance_projection_id": "res.op.delta",
+      "receipt_metrics": ["kernel_id","kernel_version","digest_in","digest_out","C_before","C_after","r_before","r_after","transform"],
+      "kernel_policy": { "requires_kernel_id": true, "requires_kernel_version": true }
+    },
+    {
+      "op_id": 13,
+      "token": "regulate_circle",
+      "type_signature": {
+        "args": [{ "tag": "FIELD", "of": { "tag": "SCALAR" } }],
+        "ret": { "tag": "FIELD", "of": { "tag": "SCALAR" } }
+      },
+      "lowering_id": "nsc.apply.regulate_circle",
+      "resonance_projection_id": "res.op.regulate",
+      "receipt_metrics": ["kernel_id","kernel_version","digest_in","digest_out","C_before","C_after","r_before","r_after","control","fixups"],
+      "kernel_policy": { "requires_kernel_id": true, "requires_kernel_version": true }
+    },
+    {
+      "op_id": 14,
+      "token": "sink_minus",
+      "type_signature": {
+        "args": [{ "tag": "FIELD", "of": { "tag": "SCALAR" } }],
+        "ret": { "tag": "FIELD", "of": { "tag": "SCALAR" } }
+      },
+      "lowering_id": "nsc.apply.sink_minus",
+      "resonance_projection_id": "res.op.sink_minus",
+      "receipt_metrics": ["kernel_id","kernel_version","digest_in","digest_out","C_before","C_after","r_before","r_after","dissipation"],
+      "kernel_policy": { "requires_kernel_id": true, "requires_kernel_version": true }
+    },
+    {
+      "op_id": 20,
+      "token": "return_to_baseline",
+      "type_signature": {
+        "args": [
+          { "tag": "FIELD", "of": { "tag": "SCALAR" } },
+          { "tag": "FIELD", "of": { "tag": "SCALAR" } }
+        ],
+        "ret": { "tag": "FIELD", "of": { "tag": "SCALAR" } }
+      },
+      "lowering_id": "nsc.apply.return_to_baseline",
+      "resonance_projection_id": "res.op.return_baseline",
+      "receipt_metrics": ["kernel_id","kernel_version","digest_in","digest_out","C_before","C_after","r_before","r_after","params"],
+      "kernel_policy": { "requires_kernel_id": true, "requires_kernel_version": true }
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "run_id": "demo_run_0001",
+  "event_id": "op_000042",
+  "thread_id": "micro",
+  "step_index": 12,
+  "kind": "op_apply",
+  "op_id": 20,
+  "kernel": { "kernel_id": "kern.return_baseline.linear_blend", "kernel_version": "1.0.0" },
+  "digests": {
+    "digest_in": {
+      "x": "sha256:2bb0f2c0b2c4c0d8b2a6b3c4d1e2f3a4b5c6d7e8f90123456789abcdef012345",
+      "ref": "sha256:0aa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f809123456789abcdef012345678"
+    },
+    "digest_out": "sha256:9f8e7d6c5b4a392817161514131211100f0e0d0c0b0a09080706050403020100"
+  },
+  "delta": {
+    "C_before": 0.9928,
+    "C_after": 0.9951,
+    "dC": 0.0023,
+    "r_before": { "r_gate": 0.0112, "r_cons": 0.0047, "r_num": 0.0189 },
+    "r_after": { "r_gate": 0.0086, "r_cons": 0.0039, "r_num": 0.0151 }
+  },
+  "params": { "mode": "linear_blend", "alpha": 0.15 },
+  "parents": ["gate_000041"],
+  "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NSC Node",
+  "type": "object",
+  "required": ["id", "kind", "type"],
+  "properties": {
+    "id": { "type": "integer", "minimum": 1 },
+    "kind": {
+      "type": "string",
+      "enum": ["CONST","FIELD_REF","APPLY","SEQ","GATE_CHECK","GOVERN","EMIT","STEP"]
+    },
+    "type": { "$ref": "nsc_type.schema.json" },
+
+    "value": {},
+    "field_id": { "type": "integer", "minimum": 1 },
+
+    "op_id": { "type": "integer", "minimum": 1 },
+    "args": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 }
+    },
+
+    "seq": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 1
+    },
+
+    "gate_id": { "type": "integer", "minimum": 1 },
+    "snapshot": { "type": "integer", "minimum": 1 },
+
+    "history": { "type": "integer", "minimum": 1 },
+    "reports": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 }
+    },
+
+    "emit_kind": { "type": "string" },
+    "payload_ref": { "type": "integer", "minimum": 1 },
+
+    "dt_ref": { "type": "integer", "minimum": 1 },
+    "rhs_ref": { "type": "integer", "minimum": 1 },
+    "method_id": { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": true
+}

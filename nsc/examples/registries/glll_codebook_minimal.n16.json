@@ -1,0 +1,17 @@
+{
+  "n": 16,
+  "reserved_control_rows": {
+    "REJECT": 0
+  },
+  "rows": [
+    { "row_id": 0, "glyph_id": "CONTROL.REJECT", "vector": [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] },
+    { "row_id": 1, "glyph_id": "GLYPH.SOURCE_PLUS", "vector": [1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1,1,-1] },
+    { "row_id": 2, "glyph_id": "GLYPH.TWIST", "vector": [1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1] },
+    { "row_id": 3, "glyph_id": "GLYPH.DELTA", "vector": [1,1,1,1,-1,-1,-1,-1,1,1,1,1,-1,-1,-1,-1] }
+  ],
+  "mapping_to_op_id": {
+    "GLYPH.SOURCE_PLUS": 10,
+    "GLYPH.TWIST": 11,
+    "GLYPH.DELTA": 12
+  }
+}

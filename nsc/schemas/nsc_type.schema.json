@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NSC Type",
+  "type": "object",
+  "required": ["tag"],
+  "properties": {
+    "tag": {
+      "type": "string",
+      "enum": ["I64","F64","BOOL","BYTES","SCALAR","PHASE","FIELD","REPORT","ACTION_PLAN"]
+    },
+    "of": { "$ref": "#" },
+    "kind": {
+      "type": "string",
+      "enum": ["GATE_REPORT","DECODE_REPORT","OP_RECEIPT","EVENT"]
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "tag": { "const": "FIELD" } } },
+      "then": { "required": ["of"] }
+    },
+    {
+      "if": { "properties": { "tag": { "const": "REPORT" } } },
+      "then": { "required": ["kind"] }
+    }
+  ]
+}

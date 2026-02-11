@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GateReport",
+  "type": "object",
+  "required": ["pass","C","r","recommended_action"],
+  "properties": {
+    "pass": { "type": "boolean" },
+    "C": { "type": "number", "minimum": 0, "maximum": 1 },
+    "r": {
+      "type": "object",
+      "required": ["r_gate","r_cons","r_num"],
+      "properties": {
+        "r_gate": { "type": "number" },
+        "r_cons": { "type": "number" },
+        "r_num": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "recommended_action": {
+      "type": "string",
+      "enum": ["NONE","DT_REDUCE","ROLLBACK","PROJECT","DAMP","ABORT"]
+    },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": true
+}

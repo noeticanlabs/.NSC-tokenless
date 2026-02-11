@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DecodeReport",
+  "type": "object",
+  "required": ["n","chosen","topk","thresholds","margin"],
+  "properties": {
+    "n": { "type": "integer", "minimum": 8 },
+    "chosen": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["GLYPH_ID","REJECT"] },
+        "glyph_id": { "type": "string" },
+        "control_row_id": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "topk": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["glyph_id","score"],
+        "properties": {
+          "glyph_id": { "type": "string" },
+          "score": { "type": "number" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "required": ["tau_abs","tau_margin"],
+      "properties": {
+        "tau_abs": { "type": "number" },
+        "tau_margin": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "margin": { "type": "number" }
+  },
+  "additionalProperties": true
+}

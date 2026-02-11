@@ -1,0 +1,15 @@
+{
+  "run_id": "demo_run_0001",
+  "events": [
+    {
+      "run_id": "demo_run_0001",
+      "event_id": "e1",
+      "thread_id": "micro",
+      "step_index": 0,
+      "kind": "op_apply",
+      "payload": { "op_id": 10, "note": "source_plus applied" },
+      "parents": [],
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}
