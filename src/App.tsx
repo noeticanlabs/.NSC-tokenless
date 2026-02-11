@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "./components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import { Input } from "./components/ui/input";
+import { Label } from "./components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
+import { Switch } from "./components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Play, Pause, RotateCcw, Download, Activity, Grid as GridIcon, Crosshair, Layers } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ResponsiveContainer } from "recharts";
 
@@ -465,9 +465,8 @@ function Controls({ sim }: { sim: ReturnType<typeof useRFTSim> }) {
   // CSV export
   const downloadCSV = () => {
     const header = ["t", "R", "E_xy", "Q_total", "N_plus", "N_minus", "sep", "Phi"].join(",");
-    const rows = sim.series.map((d) => [d.t, d.R, d.Exy, d.Q, d.Nplus, d.Nminus, d.sep ?? "", d.Phi].join(",");
-    const csv = [header, ...rows].join("
-");
+    const rows = sim.series.map((d) => [d.t, d.R, d.Exy, d.Q, d.Nplus, d.Nminus, d.sep ?? "", d.Phi].join(","));
+    const csv = [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
