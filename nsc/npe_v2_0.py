@@ -442,13 +442,18 @@ class BeamSearchSynthesizer:
     def _build_operator_index(self) -> None:
         """Index operators by output type for fast lookup."""
         for op_id, op in self.registry.ops.items():
-            type_key = op.sig.ret.to_json() if hasattr(op.sig.ret, 'to_json') else str(op.sig.ret)
+            # Convert TypeTag to hashable string
+            ret_json = op.sig.ret.to_json() if hasattr(op.sig.ret, 'to_json') else op.sig.ret
+            type_key = json.dumps(ret_json, sort_keys=True) if isinstance(ret_json, dict) else str(ret_json)
+            
+            args_json = [a.to_json() if hasattr(a, 'to_json') else str(a) for a in op.sig.args]
+            
             self.ops_by_output[type_key].append(OperatorCandidate(
                 op_id=op_id,
                 name=op.token,
-                args=[a.to_json() if hasattr(a, 'to_json') else str(a) for a in op.sig.args],
-                ret=op.sig.ret.to_json() if hasattr(op.sig.ret, 'to_json') else str(op.sig.ret),
-                cost_increment=0.1  # Base cost per operator
+                args=args_json,
+                ret=ret_json,
+                cost_increment=0.1
             ))
     
     def synthesize(self,

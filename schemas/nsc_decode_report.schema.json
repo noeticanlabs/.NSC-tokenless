@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NSC Decode Report",
+  "type": "object",
+  "required": ["event_id", "n", "chosen", "thresholds", "margin"],
+  "properties": {
+    "event_id": { "type": "string" },
+    "n": { "type": "integer", "minimum": 1 },
+    "chosen": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["GLYPH_ID", "REJECT"] },
+        "glyph_id": { "type": "string" },
+        "control_row_id": { "type": "integer" }
+      }
+    },
+    "topk": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "glyph_id": { "type": "string" },
+          "score": { "type": "number", "minimum": -1, "maximum": 1 }
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "required": ["tau_abs", "tau_margin"],
+      "properties": {
+        "tau_abs": { "type": "number", "minimum": 0, "maximum": 1 },
+        "tau_margin": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "margin": { "type": "number" },
+    "codebook_version": { "type": "string" },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

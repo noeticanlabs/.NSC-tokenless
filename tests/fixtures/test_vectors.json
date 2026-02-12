@@ -1,0 +1,73 @@
+{
+  "version": "1.1.0",
+  "description": "NSC Tokenless v1.1 Test Vectors",
+  "modules": {
+    "minimal_add": {
+      "module_id": "test_minimal_add",
+      "version": "1.1.0",
+      "nodes": [
+        {"id": 1, "type_tag": {"tag": "float"}, "payload": {"kind": "CONST", "value": 10.0}},
+        {"id": 2, "type_tag": {"tag": "float"}, "payload": {"kind": "CONST", "value": 5.0}},
+        {"id": 3, "type_tag": {"tag": "float"}, "payload": {"kind": "APPLY", "op_id": 1001, "inputs": [1, 2]}}
+      ],
+      "seq": [1, 2, 3],
+      "entrypoints": [3],
+      "registry_ref": "test_registry_v1",
+      "expected_output": 15.0
+    },
+    "chain_ops": {
+      "module_id": "test_chain_ops",
+      "version": "1.1.0",
+      "nodes": [
+        {"id": 1, "type_tag": {"tag": "float"}, "payload": {"kind": "CONST", "value": 10.0}},
+        {"id": 2, "type_tag": {"tag": "float"}, "payload": {"kind": "CONST", "value": 3.0}},
+        {"id": 3, "type_tag": {"tag": "float"}, "payload": {"kind": "APPLY", "op_id": 1003, "inputs": [1, 2]}},
+        {"id": 4, "type_tag": {"tag": "float"}, "payload": {"kind": "CONST", "value": 2.0}},
+        {"id": 5, "type_tag": {"tag": "float"}, "payload": {"kind": "APPLY", "op_id": 1002, "inputs": [3, 4]}}
+      ],
+      "seq": [1, 2, 3, 4, 5],
+      "entrypoints": [5],
+      "registry_ref": "test_registry_v1",
+      "expected_output": 28.0
+    }
+  },
+  "registries": {
+    "test_registry_v1": {
+      "registry_id": "test_registry_v1",
+      "operators": [
+        {"op_id": 1001, "name": "ADD", "arg_types": ["float", "float"], "ret_type": "float"},
+        {"op_id": 1002, "name": "SUB", "arg_types": ["float", "float"], "ret_type": "float"},
+        {"op_id": 1003, "name": "MUL", "arg_types": ["float", "float"], "ret_type": "float"},
+        {"op_id": 1004, "name": "DIV", "arg_types": ["float", "float"], "ret_type": "float"}
+      ]
+    }
+  },
+  "gate_thresholds": {
+    "phys": 0.01,
+    "cons": 0.02,
+    "num": 0.01,
+    "nan_check": true,
+    "inf_check": true,
+    "positivity_check": true
+  },
+  "residuals": {
+    "healthy": {"phys": 0.001, "cons": 0.002, "num": 0.0005},
+    "high_phys": {"phys": 0.05, "cons": 0.002, "num": 0.0005},
+    "high_cons": {"phys": 0.001, "cons": 0.05, "num": 0.0005},
+    "high_num": {"phys": 0.001, "cons": 0.002, "num": 0.05},
+    "nan_present": {"phys": "NaN", "cons": 0.002, "num": 0.0005},
+    "inf_present": {"phys": "Infinity", "cons": 0.002, "num": 0.0005},
+    "negative_cons": {"phys": 0.001, "cons": -0.01, "num": 0.0005}
+  },
+  "glll": {
+    "n": 16,
+    "signal_perfect": [1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1],
+    "signal_noisy": [0.9, 1.1, 0.8, 1.2, 0.95, 1.05, 1.0, 0.9, -1.1, -0.9, -1.2, -0.8, -1.05, -0.95, -1.0, -1.1],
+    "reject_threshold": 0.7,
+    "max_rejects": 3
+  },
+  "tolerances": {
+    "replay": 1e-6,
+    "gate_hysteresis": 0.5
+  }
+}

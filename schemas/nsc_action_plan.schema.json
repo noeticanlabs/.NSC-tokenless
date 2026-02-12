@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NSC Action Plan",
+  "type": "object",
+  "required": ["event_id", "action", "trigger_reports"],
+  "properties": {
+    "event_id": { "type": "string" },
+    "action": { "type": "string", "enum": ["CONTINUE", "RAIL", "RETRY", "ABORT", "ROLLBACK"] },
+    "trigger_reports": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "rail_applied": {
+      "type": "string",
+      "enum": ["R1", "R2", "R3", "R4", null]
+    },
+    "retry_count": { "type": "integer", "minimum": 0 },
+    "next_dt": { "type": "number" },
+    "state_delta": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" },
+        "dt": { "type": "number" }
+      }
+    },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

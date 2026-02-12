@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NSC Gate Report",
+  "type": "object",
+  "required": ["event_id", "node_id", "gate_kind", "passed", "thresholds"],
+  "properties": {
+    "event_id": { "type": "string" },
+    "node_id": { "type": "integer" },
+    "gate_kind": { "type": "string", "enum": ["HARD", "SOFT"] },
+    "passed": { "type": "boolean" },
+    "thresholds": {
+      "type": "object",
+      "properties": {
+        "phys_fail": { "type": "number" },
+        "phys_warn": { "type": "number" },
+        "cons_fail": { "type": "number" },
+        "cons_warn": { "type": "number" },
+        "num_fail": { "type": "number" }
+      }
+    },
+    "values": {
+      "type": "object",
+      "properties": {
+        "r_phys": { "type": "number" },
+        "r_cons": { "type": "number" },
+        "r_num": { "type": "number" }
+      }
+    },
+    "decision": { "type": "string", "enum": ["ACCEPT", "WARN", "REJECT", "ABORT"] },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}
