@@ -1,3 +1,21 @@
+"""
+Noetican Proposal Engine v0.1 (DEPRECATED)
+
+⚠️  WARNING: This module is deprecated and will be removed in a future version.
+
+Please migrate to:
+- nsc.NPE (v2.0, default) - for full features including beam-search synthesis
+- nsc.NPE_v1_0 - for stable alternative
+
+To use the new default:
+    from nsc import NPE
+
+To import v1.0 specifically:
+    from nsc import NPE_v1_0
+
+This v0.1 implementation is kept for backward compatibility only.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

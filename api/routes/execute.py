@@ -1,0 +1,86 @@
+"""Execute endpoint for module execution."""
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
+import time
+
+router = APIRouter()
+
+
+class ExecuteRequest(BaseModel):
+    """Request body for module execution."""
+    module: Dict[str, Any]
+    registry: Optional[Dict[str, Any]] = None
+    options: Optional[Dict[str, Any]] = None
+
+
+class ExecuteResponse(BaseModel):
+    """Response body for module execution."""
+    success: bool
+    module_id: Optional[str] = None
+    execution_time_ms: float
+    results: Optional[Dict[str, Any]] = None
+    receipts_count: int = 0
+    braid_events_count: int = 0
+    error: Optional[str] = None
+
+
+@router.post("/execute", response_model=ExecuteResponse)
+async def execute_module(request: ExecuteRequest):
+    """Execute an NSC module."""
+    start_time = time.time()
+    
+    try:
+        # Import runtime components
+        from nsc.runtime.interpreter import Interpreter
+        from nsc.runtime.environment import Environment
+        
+        # Setup registry
+        registry = request.registry or {
+            "registry_id": "default",
+            "version": "1.0",
+            "operators": [
+                {"op_id": 1001, "name": "ADD", "arg_types": ["float"], "ret_type": "float"},
+                {"op_id": 1002, "name": "SUB", "arg_types": ["float"], "ret_type": "float"},
+                {"op_id": 1003, "name": "MUL", "arg_types": ["float"], "ret_type": "float"},
+                {"op_id": 1004, "name": "DIV", "arg_types": ["float"], "ret_type": "float"},
+            ]
+        }
+        
+        # Create environment
+        env = Environment(registry=registry)
+        
+        # Setup default kernels
+        env.kernels = {
+            "kernel_add": lambda a, b: a + b,
+            "kernel_sub": lambda a, b: a - b,
+            "kernel_mul": lambda a, b: a * b,
+            "kernel_div": lambda a, b: a / b if b != 0 else float('inf'),
+        }
+        
+        # Create interpreter and execute
+        interpreter = Interpreter(env=env)
+        result = interpreter.interpret(request.module)
+        
+        execution_time = (time.time() - start_time) * 1000
+        
+        if result.success:
+            return ExecuteResponse(
+                success=True,
+                module_id=request.module.get("module_id"),
+                execution_time_ms=execution_time,
+                results=result.results,
+                receipts_count=len(result.receipts) if result.receipts else 0,
+                braid_events_count=len(result.braid_events) if result.braid_events else 0
+            )
+        else:
+            return ExecuteResponse(
+                success=False,
+                module_id=request.module.get("module_id"),
+                execution_time_ms=execution_time,
+                error=result.error
+            )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

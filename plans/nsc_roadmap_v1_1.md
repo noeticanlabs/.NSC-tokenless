@@ -54,6 +54,8 @@ docs/
   ✓ security/threat_model.md
   ✓ security/integrity.md
   ✓ security/safe_extensions.md
+  ✓ index.md                    [NEW]
+  ✓ versions.md                 [NEW]
 
 schemas/
   ✓ nsc_kernel_binding.schema.json
@@ -73,10 +75,27 @@ examples/
 ```
 
 ### 0.3 Exit Criteria
-- [ ] All spec files reviewed and approved
-- [ ] Schema validation passes
-- [ ] Terminology aligned between NSC and Coherence
-- [ ] Test vectors validated
+- [x] All spec files reviewed and approved
+- [x] Schema validation passes
+- [x] Terminology aligned between NSC and Coherence
+- [x] Test vectors validated
+
+---
+
+## Phase 0.5: NPE Version Standardization (COMPLETED 2026-02-12)
+
+**Status:** ✅ COMPLETED
+
+| Task | Status |
+|------|--------|
+| Create nsc/__init__.py with v2.0 as default | ✅ |
+| Add deprecation notice to npe_v0_1.py | ✅ |
+| Create docs/versions.md | ✅ |
+
+**Files Changed:**
+- `nsc/__init__.py` - New export module
+- `nsc/npe_v0_1.py` - Added deprecation notice
+- `docs/versions.md` - New version strategy document
 
 ---
 

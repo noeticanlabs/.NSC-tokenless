@@ -1,21 +1,19 @@
 """NSC Tokenless v1.1 Command Line Interface."""
+
 import argparse
-import json
 import sys
 from pathlib import Path
-from typing import Dict, Any
-
-from nsc.runtime.interpreter import Interpreter
-from nsc.runtime.environment import Environment
-from nsc.governance.gate_checker import GateChecker
-from nsc.glyphs import GLLLCodebook
 
 
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="NSC Tokenless v1.1 - Tokenless execution engine"
+        description="NSC Tokenless v1.1 - Tokenless execution engine with coherence governance"
     )
+    
+    # Global options
+    parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--version", action="version", version="NSC Tokenless v1.1.0")
     
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
@@ -23,163 +21,137 @@ def main():
     execute_parser = subparsers.add_parser("execute", help="Execute an NSC module")
     execute_parser.add_argument("module", type=Path, help="Path to NSC module JSON")
     execute_parser.add_argument("--registry", type=Path, help="Path to operator registry")
+    execute_parser.set_defaults(func=_cmd_execute)
     
     # Validate command
     validate_parser = subparsers.add_parser("validate", help="Validate an NSC module")
     validate_parser.add_argument("module", type=Path, help="Path to NSC module JSON")
+    validate_parser.set_defaults(func=_cmd_validate)
     
     # Decode command
     decode_parser = subparsers.add_parser("decode", help="Decode GLLL signal")
     decode_parser.add_argument("signal", type=str, help="JSON array of signal values")
-    decode_parser.add_argument("--n", type=int, default=16, help="GLLL n parameter")
+    decode_parser.add_argument("--n", type=int, default=16, help="GLLL n parameter (default: 16)")
+    decode_parser.set_defaults(func=_cmd_decode)
     
     # Gate command
     gate_parser = subparsers.add_parser("gate", help="Evaluate gate policy")
     gate_parser.add_argument("residuals", type=str, help="JSON object with residuals")
+    gate_parser.set_defaults(func=_cmd_gate)
     
-    # Version command
-    version_parser = subparsers.add_parser("version", help="Show version info")
+    # Replay command
+    replay_parser = subparsers.add_parser("replay", help="Verify receipt chain through replay")
+    replay_parser.add_argument("--receipts", type=Path, required=True, help="Path to receipts JSON")
+    replay_parser.add_argument("--module", type=Path, help="Path to original module for verification")
+    replay_parser.set_defaults(func=_cmd_replay)
+    
+    # Module command with subcommands
+    module_parser = subparsers.add_parser("module", help="Module management commands")
+    module_subparsers = module_parser.add_subparsers(dest="subcommand", help="Module subcommands")
+    
+    module_info_parser = module_subparsers.add_parser("info", help="Show module information")
+    module_info_parser.add_argument("module", type=Path, help="Path to NSC module JSON")
+    module_info_parser.set_defaults(func=_cmd_module_info)
+    
+    module_digest_parser = module_subparsers.add_parser("digest", help="Compute module digest")
+    module_digest_parser.add_argument("module", type=Path, help="Path to NSC module JSON")
+    module_digest_parser.set_defaults(func=_cmd_module_digest)
+    
+    module_link_parser = module_subparsers.add_parser("link", help="Link modules together")
+    module_link_parser.add_argument("module", type=Path, help="Path to primary module JSON")
+    module_link_parser.add_argument("--other", type=Path, action="append", help="Additional modules to link")
+    module_link_parser.set_defaults(func=_cmd_module_link)
+    
+    # Registry command with subcommands
+    registry_parser = subparsers.add_parser("registry", help="Registry management commands")
+    registry_subparsers = registry_parser.add_subparsers(dest="subcommand", help="Registry subcommands")
+    
+    registry_list_parser = registry_subparsers.add_parser("list", help="List operators in registry")
+    registry_list_parser.add_argument("--registry", type=Path, required=True, help="Path to registry JSON")
+    registry_list_parser.set_defaults(func=_cmd_registry_list)
+    
+    registry_info_parser = registry_subparsers.add_parser("info", help="Show registry information")
+    registry_info_parser.add_argument("--registry", type=Path, required=True, help="Path to registry JSON")
+    registry_info_parser.set_defaults(func=_cmd_registry_info)
+    
+    registry_validate_parser = registry_subparsers.add_parser("validate", help="Validate registry structure")
+    registry_validate_parser.add_argument("--registry", type=Path, required=True, help="Path to registry JSON")
+    registry_validate_parser.set_defaults(func=_cmd_registry_validate)
     
     args = parser.parse_args()
     
-    if args.command == "execute":
-        execute_module(args)
-    elif args.command == "validate":
-        validate_module(args)
-    elif args.command == "decode":
-        decode_signal(args)
-    elif args.command == "gate":
-        evaluate_gates(args)
-    elif args.command == "version":
-        print("NSC Tokenless v1.1.0")
-    else:
+    if args.command is None:
         parser.print_help()
-
-
-def execute_module(args):
-    """Execute an NSC module."""
+        return 0
+    
+    # Execute command
     try:
-        module_path = args.module
-        registry_path = args.registry
-        
-        # Load module
-        with open(module_path) as f:
-            module = json.load(f)
-        
-        # Load registry
-        if registry_path:
-            with open(registry_path) as f:
-                registry = json.load(f)
-        else:
-            # Use default registry
-            registry = {
-                "registry_id": "default",
-                "operators": [
-                    {"op_id": 1001, "name": "ADD", "arg_types": ["float"], "ret_type": "float"},
-                    {"op_id": 1002, "name": "SUB", "arg_types": ["float"], "ret_type": "float"},
-                    {"op_id": 1003, "name": "MUL", "arg_types": ["float"], "ret_type": "float"},
-                    {"op_id": 1004, "name": "DIV", "arg_types": ["float"], "ret_type": "float"},
-                ]
-            }
-        
-        # Create environment and interpreter
-        env = Environment(registry=registry)
-        
-        # Setup default kernels
-        env.kernels = {
-            "kernel_add": lambda a, b: a + b,
-            "kernel_sub": lambda a, b: a - b,
-            "kernel_mul": lambda a, b: a * b,
-            "kernel_div": lambda a, b: a / b if b != 0 else float('inf'),
-        }
-        
-        interpreter = Interpreter(env=env)
-        
-        # Execute
-        result = interpreter.interpret(module)
-        
-        # Output result
-        output = {
-            "success": result.success,
-            "node_count": result.node_count,
-            "outputs": result.outputs,
-            "duration_ms": result.duration_ms,
-        }
-        
-        print(json.dumps(output, indent=2))
-        
+        return args.func(args)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
 
-def validate_module(args):
-    """Validate an NSC module."""
-    try:
-        module_path = args.module
-        
-        with open(module_path) as f:
-            module = json.load(f)
-        
-        # Basic validation
-        required_fields = ["module_id", "nodes", "seq", "entrypoints", "registry_ref"]
-        missing = [f for f in required_fields if f not in module]
-        
-        if missing:
-            print(f"Validation FAILED: Missing fields: {missing}")
-            sys.exit(1)
-        
-        # Check node IDs
-        node_ids = {n["id"] for n in module["nodes"]}
-        for node_id in module["seq"]:
-            if node_id not in node_ids:
-                print(f"Validation FAILED: SEQ contains unknown node ID: {node_id}")
-                sys.exit(1)
-        
-        print("Validation PASSED")
-        
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+def _cmd_execute(args):
+    from nsc.cli.execute import execute_command
+    return execute_command(args)
 
 
-def decode_signal(args):
-    """Decode a GLLL signal."""
-    try:
-        signal = json.loads(args.signal)
-        n = args.n
-        
-        codebook = GLLLCodebook(n=n)
-        result = codebook.decode(signal)
-        
-        print(json.dumps(result, indent=2))
-        
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+def _cmd_validate(args):
+    from nsc.cli.validate import validate_command
+    return validate_command(args)
 
 
-def evaluate_gates(args):
-    """Evaluate gate policy on residuals."""
-    try:
-        residuals = json.loads(args.residuals)
-        
-        checker = GateChecker(thresholds={
-            "phys": 0.01,
-            "cons": 0.02,
-            "num": 0.01,
-            "nan_check": True,
-            "inf_check": True,
-            "positivity_check": True,
-        })
-        
-        report = checker.evaluate(residuals)
-        print(json.dumps(report, indent=2))
-        
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+def _cmd_decode(args):
+    from nsc.cli.decode import decode_command
+    return decode_command(args)
+
+
+def _cmd_gate(args):
+    from nsc.cli.gate import gate_command
+    return gate_command(args)
+
+
+def _cmd_replay(args):
+    from nsc.cli.replay import replay_command
+    return replay_command(args)
+
+
+def _cmd_module_info(args):
+    from nsc.cli.module import module_command
+    args.subcommand = "info"
+    return module_command(args)
+
+
+def _cmd_module_digest(args):
+    from nsc.cli.module import module_command
+    args.subcommand = "digest"
+    return module_command(args)
+
+
+def _cmd_module_link(args):
+    from nsc.cli.module import module_command
+    args.subcommand = "link"
+    return module_command(args)
+
+
+def _cmd_registry_list(args):
+    from nsc.cli.registry import registry_command
+    args.subcommand = "list"
+    return registry_command(args)
+
+
+def _cmd_registry_info(args):
+    from nsc.cli.registry import registry_command
+    args.subcommand = "info"
+    return registry_command(args)
+
+
+def _cmd_registry_validate(args):
+    from nsc.cli.registry import registry_command
+    args.subcommand = "validate"
+    return registry_command(args)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

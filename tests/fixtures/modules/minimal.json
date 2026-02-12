@@ -1,0 +1,27 @@
+{
+  "module_id": "test_minimal_001",
+  "version": "1.1.0",
+  "nodes": [
+    {
+      "id": 1,
+      "kind": "CONST",
+      "type_tag": {"tag": "float"},
+      "payload": {"value": 2.0}
+    },
+    {
+      "id": 2,
+      "kind": "CONST",
+      "type_tag": {"tag": "float"},
+      "payload": {"value": 3.0}
+    },
+    {
+      "id": 3,
+      "kind": "APPLY",
+      "type_tag": {"tag": "float"},
+      "payload": {"op_id": 1001, "inputs": [1, 2]}
+    }
+  ],
+  "seq": [1, 2, 3],
+  "entrypoints": [3],
+  "registry_ref": "test_registry"
+}
