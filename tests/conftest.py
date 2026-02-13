@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from nsc.runtime.state import RuntimeState, FieldHandle
+from nsc.runtime.state import RuntimeState, FieldHandle, ValueType
 from nsc.runtime.environment import Environment
 from nsc.glyphs import GLLLCodebook, REJECTHandler
 
@@ -74,27 +74,17 @@ def sample_kernel_binding() -> Dict[str, Any]:
 @pytest.fixture
 def empty_runtime_state() -> RuntimeState:
     """Empty runtime state for testing."""
-    return RuntimeState(
-        fields={},
-        node_results={},
-        metrics=None,
-        execution_history=[]
-    )
+    return RuntimeState()
 
 
 @pytest.fixture
 def initialized_runtime_state(sample_module: Dict[str, Any]) -> RuntimeState:
     """Initialized runtime state for testing."""
-    state = RuntimeState(
-        fields={
-            1: FieldHandle(field_id=1, dtype="float32"),
-            2: FieldHandle(field_id=2, dtype="float32"),
-            3: FieldHandle(field_id=3, dtype="float32"),
-        },
-        node_results={},
-        metrics=None,
-        execution_history=[]
-    )
+    state = RuntimeState()
+    # Register fields using the proper API
+    state.register_field(1, ValueType.SCALAR, 0.0)
+    state.register_field(2, ValueType.SCALAR, 0.0)
+    state.register_field(3, ValueType.SCALAR, 0.0)
     return state
 
 

@@ -174,6 +174,93 @@ class ReplayVerifier:
             actual_metrics=actual_metrics
         )
     
+    def verify_hash_chain(self, receipts: List[Dict[str, Any]]) -> bool:
+        """
+        Verify hash chain integrity of receipts.
+        
+        Per docsgoverancereplay_verification.md: Check digest chaining.
+        Returns True if chain is valid, False otherwise.
+        """
+        if not receipts or len(receipts) < 1:
+            return True  # Empty chain is trivially valid
+        
+        import hashlib
+        
+        # Compute parent hash chain
+        for i, receipt in enumerate(receipts):
+            # Compute what the parent hash should be
+            if i == 0:
+                # First receipt: digest_in is usually empty or "0"*64
+                digest_in = receipt.get("digest_in", "")
+                if digest_in and digest_in != "sha256:" + "0"*64:
+                    return False
+            else:
+                # Verify against previous receipt's digest
+                expected_parent = receipts[i-1].get("digest", receipts[i-1].get("digest_out", ""))
+                actual_parent = receipt.get("digest_in", "")
+                
+                if expected_parent and actual_parent and expected_parent != actual_parent:
+                    return False
+            
+            # Verify receipt digest by recomputing
+            receipt_copy = {k: v for k, v in receipt.items() if k not in ["digest"]}
+            canon = json.dumps(receipt_copy, sort_keys=True, separators=(",", ":"))
+            computed_digest = "sha256:" + hashlib.sha256(canon.encode("utf-8")).hexdigest()
+            
+            stored_digest = receipt.get("digest", "")
+            if stored_digest and stored_digest != computed_digest:
+                # Digest mismatch
+                return False
+        
+        return True
+    
+    def verify_receipt(self,
+                       receipt: Dict[str, Any],
+                       module: Dict[str, Any],
+                       expected_metrics: Dict[str, float] = None) -> Dict[str, Any]:
+        """
+        Verify a single receipt against expected values.
+        
+        Args:
+            receipt: Receipt dict to verify
+            module: Original module (for reference)
+            expected_metrics: Expected metric values
+        
+        Returns:
+            Verification detail dict with fields: valid, node_id, op_id, metric_errors
+        """
+        detail = {
+            "valid": True,
+            "node_id": receipt.get("node_id"),
+            "op_id": receipt.get("op_id"),
+            "metric_errors": []
+        }
+        
+        # Verify node exists in module
+        node_ids = {n.get("id") for n in module.get("nodes", [])}
+        if receipt.get("node_id") not in node_ids:
+            detail["valid"] = False
+            detail["metric_errors"].append(f"Node {receipt.get('node_id')} not in module")
+            return detail
+        
+        # Verify metrics if provided
+        if expected_metrics:
+            for metric, expected_val in expected_metrics.items():
+                actual_val = receipt.get(metric, 0.0)
+                
+                if isinstance(expected_val, (int, float)) and isinstance(actual_val, (int, float)):
+                    abs_diff = abs(actual_val - expected_val)
+                    rel_diff = abs_diff / max(abs(actual_val), abs(expected_val), 1e-10)
+                    
+                    if abs_diff > self.abs_tolerance and rel_diff > self.rel_tolerance:
+                        detail["valid"] = False
+                        detail["metric_errors"].append(
+                            f"{metric}: expected {expected_val}, got {actual_val} "
+                            f"(Δ_abs={abs_diff:.2e}, Δ_rel={rel_diff:.2e})"
+                        )
+        
+        return detail
+    
     def _compute_module_digest(self, module: Dict[str, Any]) -> str:
         """Compute module digest."""
         import hashlib

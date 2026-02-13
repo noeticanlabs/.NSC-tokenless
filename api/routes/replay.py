@@ -28,6 +28,14 @@ async def verify_replay(request: ReplayRequest):
         # Import replay verifier
         from nsc.governance.replay import ReplayVerifier
         
+        if not request.receipts:
+            return ReplayResponse(
+                receipts_count=0,
+                hash_chain_valid=True,
+                overall_valid=True,
+                verification_details=[]
+            )
+        
         verifier = ReplayVerifier()
         
         # Verify hash chaining
@@ -40,13 +48,16 @@ async def verify_replay(request: ReplayRequest):
                 detail = verifier.verify_receipt(receipt, request.module)
                 verification_details.append(detail)
         
+        # All receipts must be valid
+        receipts_valid = all(
+            d.get("valid", True) for d in verification_details
+        ) if verification_details else True
+        
         return ReplayResponse(
             receipts_count=len(request.receipts),
             hash_chain_valid=chain_valid,
             verification_details=verification_details,
-            overall_valid=chain_valid and all(
-                d.get("valid", False) for d in verification_details
-            ) if verification_details else chain_valid
+            overall_valid=chain_valid and receipts_valid
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

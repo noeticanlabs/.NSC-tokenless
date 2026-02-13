@@ -10,22 +10,17 @@ Exports:
 """
 
 from nsc.npe_v2_0 import (
-    NPE,
+    NoeticanProposalEngine_v2_0 as NPE,
     CoherenceMetrics,
-    GatePolicy,
-    ReceiptValidator,
+    GateConfig,
     OperatorReceipt,
-    GateReport,
-    GovernanceAction,
-    Proposal,
-    BeamSearchConfig,
+    ReceiptLedger,
 )
 
 # Import v1.0 for alternative use
 from nsc.npe_v1_0 import (
-    NPE as NPE_v1_0,
+    NoeticanProposalEngine_v1_0 as NPE_v1_0,
     SchemaValidator,
-    ReceiptChainValidator,
 )
 
 # Import v0.1 with deprecation warning

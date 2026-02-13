@@ -85,8 +85,42 @@ def validate_module(module: Dict[str, Any]) -> ValidateResponse:
 
 @router.post("/validate", response_model=ValidateResponse)
 async def validate_module_endpoint(request: ValidateRequest):
-    """Validate an NSC module."""
+    """Validate an NSC module against JSON schema."""
     try:
-        return validate_module(request.module)
+        import jsonschema
+        from pathlib import Path
+        
+        # Try to load NSC module schema
+        schema_path = Path(__file__).parent.parent.parent / "schemas" / "nsc_module.schema.json"
+        
+        errors = []
+        warnings = []
+        
+        # Basic structure validation
+        result = validate_module(request.module)
+        errors.extend(result.errors)
+        warnings.extend(result.warnings)
+        
+        # Try JSON schema validation if available
+        if schema_path.exists():
+            try:
+                import json
+                with open(schema_path) as f:
+                    schema = json.load(f)
+                jsonschema.validate(request.module, schema)
+            except jsonschema.ValidationError as ve:
+                errors.append(f"Schema validation failed: {ve.message}")
+            except Exception as ve:
+                warnings.append(f"Could not validate against schema: {str(ve)}")
+        
+        return ValidateResponse(
+            valid=len(errors) == 0,
+            module_id=request.module.get("module_id"),
+            node_count=len(request.module.get("nodes", [])),
+            seq_length=len(request.module.get("seq", [])),
+            entrypoints_count=len(request.module.get("entrypoints", [])),
+            errors=errors,
+            warnings=warnings
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

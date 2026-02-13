@@ -1,0 +1,36 @@
+[
+  {
+    "kind": "operator_receipt",
+    "event_id": "evt_001",
+    "node_id": 1,
+    "op_id": 1001,
+    "digest_in": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "digest_out": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "kernel_id": "kernel.add.v1",
+    "kernel_version": "1.0.0",
+    "C_before": 0.0,
+    "C_after": 0.95,
+    "r_phys": 0.001,
+    "r_cons": 0.002,
+    "r_num": 0.0005,
+    "registry_id": "default",
+    "registry_version": "1.0"
+  },
+  {
+    "kind": "operator_receipt",
+    "event_id": "evt_002",
+    "node_id": 2,
+    "op_id": 1002,
+    "digest_in": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "digest_out": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "kernel_id": "kernel.sub.v1",
+    "kernel_version": "1.0.0",
+    "C_before": 0.95,
+    "C_after": 0.92,
+    "r_phys": 0.0015,
+    "r_cons": 0.0025,
+    "r_num": 0.0007,
+    "registry_id": "default",
+    "registry_version": "1.0"
+  }
+]

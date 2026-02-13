@@ -59,9 +59,35 @@ async def execute_module(request: ExecuteRequest):
             "kernel_div": lambda a, b: a / b if b != 0 else float('inf'),
         }
         
+        # Create module context
+        from nsc.runtime.interpreter import ExecutionContext
+        ctx = ExecutionContext(
+            module=request.module,
+            module_digest="",
+            registry_id="default",
+            registry_version="1.0",
+            binding_id="default"
+        )
+        
         # Create interpreter and execute
-        interpreter = Interpreter(env=env)
-        result = interpreter.interpret(request.module)
+        from nsc.npe_v1_0 import OperatorRegistry, KernelBinding
+        
+        # Create a registry from provided one
+        ops = registry.get("operators", [])
+        op_dict = {op["op_id"]: {"name": op["name"]} for op in ops}
+        nsc_registry = OperatorRegistry(
+            registry_id=registry.get("registry_id", "default"),
+            version=registry.get("version", "1.0"),
+            ops=op_dict
+        )
+        nsc_binding = KernelBinding(
+            binding_id="default",
+            registry_id=registry.get("registry_id", "default"),
+            bindings={}
+        )
+        
+        interpreter = Interpreter(registry=nsc_registry, binding=nsc_binding)
+        result = interpreter.interpret(ctx)
         
         execution_time = (time.time() - start_time) * 1000
         
