@@ -1,3 +1,38 @@
+Metadata-Version: 2.4
+Name: nsc-tokenless
+Version: 1.1.0
+Summary: NSC Tokenless v1.1 - Tokenless execution engine with coherence governance
+Author-email: Noetica Labs <dev@noetica.ai>
+License: MIT
+Project-URL: Homepage, https://github.com/noeticanlabs/coherence-framework
+Project-URL: Repository, https://github.com/noeticanlabs/coherence-framework
+Project-URL: Issues, https://github.com/noeticanlabs/coherence-framework/issues
+Keywords: tokenless,coherence,nsc,noetican,governance,runtime,evaluation,glll,decode
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: jsonschema>=4.17.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: fastapi>=0.109.0
+Requires-Dist: uvicorn>=0.27.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: pytest-httpx>=0.28.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: mypy>=1.5.0; extra == "dev"
+Requires-Dist: types-requests>=2.31.0; extra == "dev"
+Provides-Extra: api
+Requires-Dist: fastapi>=0.109.0; extra == "api"
+Requires-Dist: uvicorn>=0.27.0; extra == "api"
+Requires-Dist: pytest-httpx>=0.28.0; extra == "api"
+
 # Noetica Geometry and Physics — Resonant Field Theory of Meaning and Matter (v3.1)
 
 ### Executive Overview
@@ -112,15 +147,6 @@ This workspace now includes **NSC Tokenless v1.0**, the executable layer for Noe
 - [Examples](nsc/examples/) — Executable example modules
 
 **Validation:** All JSON examples have been validated as syntactically correct.
-
----
-
-### Optional ML Dependencies (NPE Phase 2)
-
-Phase 2 adds operator embeddings and a success predictor. These features can use
-`tensorflow` or `scikit-learn` when available, but will fall back to a rule-based
-predictor if neither is installed. See [requirements.txt](requirements.txt) and
-[pyproject.toml](pyproject.toml) for dependency lists.
 
 ---
 

@@ -23,6 +23,7 @@ from typing import Dict, List, Tuple, Any, Optional, Set
 import hashlib
 import json
 import math
+import os
 from enum import Enum
 from heapq import heappush, heappop
 from collections import defaultdict
@@ -474,8 +475,15 @@ class BeamSearchSynthesizer:
         context = context or {}
         
         # Initialize beam with seed proposal
+        seed_node = {
+            "id": 1,
+            "kind": "INPUT",
+            "type": input_type,
+            "payload": {"role": "input"}
+        }
+
         seed = PartialProposal(
-            nodes=[],  # Empty, will add seed node
+            nodes=[seed_node],
             open_slots=[{
                 "role": "input",
                 "expected_type": input_type,
@@ -640,7 +648,13 @@ class BeamSearchSynthesizer:
         
         # For each argument the operator expects
         for arg_spec in candidate.args:
-            arg_type = arg_spec.get("type", {})
+            if isinstance(arg_spec, dict):
+                arg_type = arg_spec.get("type", arg_spec)
+            else:
+                arg_type = arg_spec
+
+            if not arg_type:
+                arg_type = expected_input_type
             
             # Find compatible nodes from available_nodes
             compatible = None
@@ -1039,6 +1053,643 @@ class ExecutionTracer:
         return hashlib.md5(op_sequence.encode()).hexdigest()[:16]
 
 
+# ============================
+# Phase 2.1: Operator Embeddings
+# Learn semantic operator space
+# ============================
+
+@dataclass
+class OperatorEmbedding:
+    """Dense vector representation of operator semantics."""
+    op_id: int
+    embedding: List[float]  # Vector in embedding space
+    embedding_dim: int = 64
+    
+    def __post_init__(self):
+        """Ensure embedding is correct dimension."""
+        if len(self.embedding) != self.embedding_dim:
+            # Pad or truncate
+            if len(self.embedding) < self.embedding_dim:
+                self.embedding = self.embedding + [0.0] * (self.embedding_dim - len(self.embedding))
+            else:
+                self.embedding = self.embedding[:self.embedding_dim]
+    
+    def similarity(self, other: "OperatorEmbedding") -> float:
+        """Cosine similarity with another embedding."""
+        if not other or not self.embedding or not other.embedding:
+            return 0.0
+        
+        dot_product = sum(a * b for a, b in zip(self.embedding, other.embedding))
+        mag_self = math.sqrt(sum(x ** 2 for x in self.embedding)) + 1e-8
+        mag_other = math.sqrt(sum(x ** 2 for x in other.embedding)) + 1e-8
+        
+        return dot_product / (mag_self * mag_other)
+    
+    def distance(self, other: "OperatorEmbedding") -> float:
+        """Euclidean distance to another embedding."""
+        if not other:
+            return float('inf')
+        return math.sqrt(sum((a - b) ** 2 for a, b in zip(self.embedding, other.embedding)))
+
+
+class OperatorEmbeddingLearner:
+    """Learn operator embeddings from execution traces.
+    
+    Phase 2.1 deliverable: Vector representations of operators in semantic space.
+    
+    Dimensions learned from profiles:
+    - Reliability (success rate)
+    - Numerical stability (residual magnitude)
+    - Coherence impact (debt contribution)
+    - Compatibility (with other operators)
+    - Domain applicability
+    """
+    
+    def __init__(self, embedding_dim: int = 64):
+        self.embedding_dim = embedding_dim
+        self.operator_embeddings: Dict[int, OperatorEmbedding] = {}
+    
+    def train(self, tracer: ExecutionTracer) -> Dict[int, OperatorEmbedding]:
+        """Learn embeddings from ExecutionTracer data.
+        
+        Uses operator profiles to create semantic vectors:
+        - Dimension 0: Success rate (0-1)
+        - Dimension 1: Avg coherence risk (0-1, inverted)
+        - Dimension 2: Debt contribution (normalized)
+        - Dimension 3-N: Learned compatibility features
+        
+        Returns: Dict of op_id -> OperatorEmbedding
+        """
+        if not tracer.operator_profiles:
+            return {}
+        
+        # Collect statistics for normalization
+        all_debts = [p.get_avg_debt() for p in tracer.operator_profiles.values()]
+        max_debt = max(all_debts) if all_debts else 0.1
+        min_debt = min(all_debts) if all_debts else 0.0
+        debt_range = max_debt - min_debt + 1e-8
+        
+        # Create embeddings for each operator
+        for op_id, profile in tracer.operator_profiles.items():
+            embedding_vec = self._create_embedding(op_id, profile, tracer, debt_range, min_debt)
+            
+            self.operator_embeddings[op_id] = OperatorEmbedding(
+                op_id=op_id,
+                embedding=embedding_vec,
+                embedding_dim=self.embedding_dim
+            )
+        
+        return self.operator_embeddings
+    
+    def _create_embedding(self, 
+                         op_id: int, 
+                         profile: OperatorProfile,
+                         tracer: ExecutionTracer,
+                         debt_range: float,
+                         min_debt: float) -> List[float]:
+        """Create embedding vector for single operator."""
+        embedding = [0.0] * self.embedding_dim
+        
+        # Dimension 0: Success rate (0-1)
+        embedding[0] = profile.success_rate
+        
+        # Dimension 1: Inverted coherence risk (0-1, higher = better)
+        risk = tracer.operator_coherence_risk(op_id)
+        embedding[1] = 1.0 - risk
+        
+        # Dimension 2: Normalized debt contribution (-1 to 1)
+        avg_debt = profile.get_avg_debt()
+        normalized_debt = (avg_debt - min_debt) / debt_range * 2.0 - 1.0
+        embedding[2] = -normalized_debt  # Negative because lower debt is better
+        
+        # Dimension 3: Operator "popularity" (how often used)
+        max_executions = max((p.executions for p in tracer.operator_profiles.values()), default=1)
+        embedding[3] = profile.executions / max_executions if max_executions > 0 else 0.0
+        
+        # Dimension 4: Average residual magnitude (normalized)
+        avg_residual = profile.get_avg_residual()
+        embedding[4] = min(1.0, avg_residual)  # Cap at 1.0
+        
+        # Dimensions 5+: Pair compatibility features
+        if tracer.operator_pairs:
+            # Look at composition with other operators
+            compatibility_scores = []
+            for other_op_id in tracer.operator_profiles.keys():
+                if other_op_id != op_id:
+                    compat = tracer.operator_compatibility(op_id, other_op_id)
+                    compatibility_scores.append(compat)
+            
+            # Compute statistics over compatibility scores
+            if compatibility_scores:
+                # Dimension 5: Mean compatibility
+                embedding[5] = sum(compatibility_scores) / len(compatibility_scores)
+                
+                # Dimension 6: Std dev of compatibility
+                mean_compat = embedding[5]
+                variance = sum((c - mean_compat) ** 2 for c in compatibility_scores) / len(compatibility_scores)
+                embedding[6] = math.sqrt(variance)
+                
+                # Dimension 7: Max compatibility (best pair)
+                embedding[7] = max(compatibility_scores)
+                
+                # Dimension 8: Min compatibility (worst pair)
+                embedding[8] = min(compatibility_scores)
+        
+        # Dimensions 9-63: Random projections for generalization
+        # In Phase 3, these would be learned via neural network
+        import random
+        random.seed(op_id)  # Deterministic per operator
+        for i in range(9, min(self.embedding_dim, 20)):  # Fill first half with projections
+            embedding[i] = random.uniform(-0.5, 0.5)
+        
+        return embedding
+    
+    def similarity_to_profile(self, op_id: int, target_profile: Dict[str, float]) -> float:
+        """Score how well operator matches a target profile.
+        
+        Target profile example:
+        {
+            "success_rate": 0.9,
+            "low_debt": True,
+            "coherent": True,
+            "popular": True
+        }
+        """
+        if op_id not in self.operator_embeddings:
+            return 0.0
+        
+        embedding = self.operator_embeddings[op_id]
+        score = 0.0
+        weight_sum = 0.0
+        
+        # Score success rate dimension
+        if "success_rate" in target_profile:
+            target = target_profile["success_rate"]
+            score += (1.0 - abs(embedding.embedding[0] - target)) * 1.0
+            weight_sum += 1.0
+        
+        # Score coherence dimension
+        if "coherent" in target_profile and target_profile["coherent"]:
+            score += embedding.embedding[1] * 1.5  # Value coherence highly
+            weight_sum += 1.5
+        
+        # Score low-debt dimension
+        if "low_debt" in target_profile and target_profile["low_debt"]:
+            score += max(0, embedding.embedding[2]) * 1.5
+            weight_sum += 1.5
+        
+        # Score popularity
+        if "popular" in target_profile and target_profile["popular"]:
+            score += embedding.embedding[3] * 0.5
+            weight_sum += 0.5
+        
+        return (score / weight_sum) if weight_sum > 0 else 0.5
+    
+    def find_similar_operators(self, op_id: int, k: int = 5) -> List[Tuple[int, float]]:
+        """Find k most similar operators in embedding space."""
+        if op_id not in self.operator_embeddings:
+            return []
+        
+        target_embedding = self.operator_embeddings[op_id]
+        similarities = []
+        
+        for other_id, other_embedding in self.operator_embeddings.items():
+            if other_id != op_id:
+                sim = target_embedding.similarity(other_embedding)
+                similarities.append((other_id, sim))
+        
+        # Sort by similarity, highest first
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        return similarities[:k]
+    
+    def cluster_operators(self, num_clusters: int = 5) -> Dict[int, List[int]]:
+        """Group operators into semantic clusters using embeddings.
+        
+        Phase 2.1 extension: Organize operators by semantic similarity.
+        """
+        if len(self.operator_embeddings) < num_clusters:
+            # Too few operators to cluster
+            clusters_dict = {i: [self.operator_embeddings[op_id].op_id] 
+                           for i, op_id in enumerate(self.operator_embeddings.keys())}
+            return clusters_dict
+        
+        # Simple k-means-like clustering
+        from random import sample
+        
+        # Initialize clusters with random seeds
+        seed_ops = sample(list(self.operator_embeddings.keys()), num_clusters)
+        clusters = {i: [] for i in range(num_clusters)}
+        
+        # Assign each operator to nearest cluster seed
+        for op_id, embedding in self.operator_embeddings.items():
+            min_dist = float('inf')
+            nearest_cluster = 0
+            
+            for cluster_idx, seed_op_id in enumerate(seed_ops):
+                seed_embedding = self.operator_embeddings[seed_op_id]
+                dist = embedding.distance(seed_embedding)
+                
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest_cluster = cluster_idx
+            
+            clusters[nearest_cluster].append(op_id)
+        
+        return clusters
+    
+    def save_embeddings(self, filepath: str) -> None:
+        """Save embeddings to JSON file."""
+        embeddings_dict = {
+            str(op_id): emb.embedding
+            for op_id, emb in self.operator_embeddings.items()
+        }
+        
+        with open(filepath, 'w') as f:
+            json.dump({
+                "embedding_dim": self.embedding_dim,
+                "operator_embeddings": embeddings_dict
+            }, f, indent=2)
+    
+    def load_embeddings(self, filepath: str) -> None:
+        """Load embeddings from JSON file."""
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+            
+            self.embedding_dim = data.get("embedding_dim", 64)
+            
+            for op_id_str, embedding_vec in data.get("operator_embeddings", {}).items():
+                op_id = int(op_id_str)
+                self.operator_embeddings[op_id] = OperatorEmbedding(
+                    op_id=op_id,
+                    embedding=embedding_vec,
+                    embedding_dim=self.embedding_dim
+                )
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass  # File doesn't exist or invalid, start fresh
+
+
+# ============================
+# Phase 2.2: Success Predictor
+# Neural network for chain success
+# ============================
+
+class SuccessPredictorModel:
+    """Neural model: operator chain -> P(success).
+    
+    Phase 2.2 deliverable: Predict chain success before execution.
+    
+    Small architecture (not LLM-scale):
+    - Input: Aggregated operator embeddings
+    - Hidden: 128 -> 64 -> 32 neurons
+    - Output: Single neuron, sigmoid for probability
+    """
+    
+    def __init__(self, embedding_dim: int = 64):
+        self.embedding_dim = embedding_dim
+        self.model = None
+        self.is_trained = False
+        self._build_model()
+    
+    def _build_model(self):
+        """Build neural network architecture."""
+        try:
+            from tensorflow import keras
+            import tensorflow as tf
+            
+            self.model = keras.Sequential([
+                keras.layers.Input(shape=(self.embedding_dim,), name="input"),
+                keras.layers.Dense(128, activation="relu", name="dense1"),
+                keras.layers.BatchNormalization(),
+                keras.layers.Dropout(0.3),
+                
+                keras.layers.Dense(64, activation="relu", name="hidden1"),
+                keras.layers.Dropout(0.2),
+                
+                keras.layers.Dense(32, activation="relu", name="hidden2"),
+                keras.layers.Dropout(0.1),
+                
+                keras.layers.Dense(1, activation="sigmoid", name="output")
+            ])
+            
+            self.model.compile(
+                optimizer=keras.optimizers.Adam(learning_rate=0.001),
+                loss="binary_crossentropy",
+                metrics=["accuracy", keras.metrics.AUC()]
+            )
+            
+            self.keras_available = True
+        except ImportError:
+            # Fallback: Simple sklearn-based predictor
+            self.keras_available = False
+            self._build_sklearn_model()
+    
+    def _build_sklearn_model(self):
+        """Build sklearn-based fallback model."""
+        try:
+            from sklearn.ensemble import RandomForestClassifier
+            self.model = RandomForestClassifier(n_estimators=50, max_depth=10)
+            self.sklearn_model = True
+        except ImportError:
+            # Final fallback: rule-based predictor
+            self.model = None
+            self.sklearn_model = False
+    
+    def predict(self, chain_embeddings: List[List[float]]) -> float:
+        """Predict success probability for a chain.
+        
+        Args:
+            chain_embeddings: List of operator embeddings in sequence
+        
+        Returns:
+            Probability of success (0-1)
+        """
+        if not chain_embeddings:
+            return 0.5
+        
+        # Aggregate embeddings across chain
+        chain_vector = self._aggregate_embeddings(chain_embeddings)
+        
+        if self.keras_available and self.model:
+            import numpy as np
+            prediction = float(self.model.predict(np.array([chain_vector]), verbose=0)[0][0])
+            return min(1.0, max(0.0, prediction))
+        elif self.sklearn_model and self.model:
+            prediction = float(self.model.predict_proba([chain_vector])[0][1])
+            return prediction
+        else:
+            # Rule-based fallback
+            return self._rule_based_predict(chain_vector)
+    
+    def _aggregate_embeddings(self, embeddings: List[List[float]]) -> List[float]:
+        """Aggregate operator embeddings into chain vector.
+        
+        Strategy:
+        - Mean: average operator quality
+        - Std: diversity of chain
+        - Max/Min: best/worst operator
+        - Weighted by position (prefer good operators early)
+        """
+        if not embeddings:
+            return [0.0] * self.embedding_dim
+        
+        # Convert to numpy for easier computation
+        import numpy as np
+        embeddings_array = np.array(embeddings)
+        
+        # Position weights: earlier operators weighted higher
+        position_weights = np.array([1.0 / (i + 1) for i in range(len(embeddings))])
+        position_weights /= position_weights.sum()  # Normalize
+        
+        # Weighted mean (prefer early operators)
+        weighted_mean = np.average(embeddings_array, axis=0, weights=position_weights)
+        
+        # Standard deviation (chain diversity)
+        std_dev = np.std(embeddings_array, axis=0)
+        
+        # Max and Min per dimension
+        max_vals = np.max(embeddings_array, axis=0)
+        min_vals = np.min(embeddings_array, axis=0)
+        
+        # Concatenate into aggregate vector
+        aggregate = np.concatenate([
+            weighted_mean,  # 0:64
+            std_dev,        # 64:128
+            max_vals,       # 128:192
+            min_vals        # 192:256
+        ])
+        
+        # Trim or pad to embedding_dim
+        if len(aggregate) > self.embedding_dim:
+            return list(aggregate[:self.embedding_dim])
+        else:
+            padding = [0.0] * (self.embedding_dim - len(aggregate))
+            return list(aggregate) + padding
+    
+    def _rule_based_predict(self, chain_vector: List[float]) -> float:
+        """Fallback rule-based predictor when models unavailable."""
+        # Dimension 0: Success rate (most important)
+        success_component = chain_vector[0] if len(chain_vector) > 0 else 0.5
+        
+        # Dimension 1: Coherence factor
+        coherence_component = chain_vector[1] if len(chain_vector) > 1 else 0.5
+        
+        # Dimension 2: Debt factor (negative)
+        debt_component = 1.0 - chain_vector[2] if len(chain_vector) > 2 else 0.5
+        
+        # Simple weighted combination
+        prediction = (
+            0.5 * success_component +
+            0.3 * coherence_component +
+            0.2 * debt_component
+        )
+        
+        return min(1.0, max(0.0, prediction))
+    
+    def train(self,
+             chains: List[List[List[float]]],
+             labels: List[int],
+             epochs: int = 20,
+             batch_size: int = 32) -> Dict[str, float]:
+        """Train the predictor on chains and outcomes.
+        
+        Args:
+            chains: List of (chain_vectors: List[embeddings])
+            labels: List of success outcomes (0 or 1)
+            epochs: Number of training epochs
+            batch_size: Batch size for training
+        
+        Returns:
+            Training metrics (loss, accuracy)
+        """
+        if not chains or not labels:
+            return {"error": "No training data"}
+        
+        # Aggregate each chain
+        import numpy as np
+        X = np.array([self._aggregate_embeddings(chain) for chain in chains])
+        y = np.array(labels)
+        
+        if self.keras_available and self.model:
+            history = self.model.fit(
+                X, y,
+                epochs=epochs,
+                batch_size=batch_size,
+                validation_split=0.2,
+                verbose=0
+            )
+            
+            self.is_trained = True
+            
+            return {
+                "loss": float(history.history["loss"][-1]),
+                "accuracy": float(history.history["accuracy"][-1]),
+                "val_accuracy": float(history.history.get("val_accuracy", [0])[-1])
+            }
+        
+        elif self.sklearn_model and self.model:
+            self.model.fit(X, y)
+            self.is_trained = True
+            
+            from sklearn.metrics import accuracy_score
+            predictions = self.model.predict(X)
+            acc = accuracy_score(y, predictions)
+            
+            return {"accuracy": float(acc)}
+        
+        else:
+            self.is_trained = True
+            return {"message": "Using rule-based predictor (no ML frameworks)"}
+    
+    def save_model(self, filepath: str) -> None:
+        """Save trained model."""
+        if self.keras_available and self.model:
+            self.model.save(filepath)
+        elif self.sklearn_model and self.model:
+            import pickle
+            with open(filepath, 'wb') as f:
+                pickle.dump(self.model, f)
+    
+    def load_model(self, filepath: str) -> None:
+        """Load pre-trained model."""
+        try:
+            if self.keras_available:
+                from tensorflow import keras
+                self.model = keras.models.load_model(filepath)
+                self.is_trained = True
+            elif self.sklearn_model:
+                import pickle
+                with open(filepath, 'rb') as f:
+                    self.model = pickle.load(f)
+                    self.is_trained = True
+        except (FileNotFoundError, Exception):
+            pass  # Model doesn't exist, use untrained
+
+
+# ============================
+# Phase 3: Online Learning Loop
+# Continuous adaptation from execution feedback
+# ============================
+
+class AdaptiveLearningLoop:
+    """Maintain embeddings and success predictor with online updates.
+
+    Ingests receipt ledgers, retrains embeddings/predictor, and optionally
+    persists learned state for reuse across runs.
+    """
+
+    def __init__(self,
+                 embedding_dim: int = 64,
+                 max_training_chains: int = 200,
+                 model_dir: Optional[str] = None,
+                 retrain_epochs: int = 10):
+        self.embedding_dim = embedding_dim
+        self.max_training_chains = max_training_chains
+        self.model_dir = model_dir
+        self.retrain_epochs = retrain_epochs
+
+        self.tracer = ExecutionTracer()
+        self.embedding_learner = OperatorEmbeddingLearner(embedding_dim=embedding_dim)
+        self.predictor = SuccessPredictorModel(embedding_dim=embedding_dim)
+
+        self.operator_embeddings: Dict[int, OperatorEmbedding] = {}
+        self.training_chains_ops: List[List[int]] = []
+        self.training_labels: List[int] = []
+        self.new_chains_since_update = 0
+
+        if self.model_dir:
+            self.load_state(self.model_dir)
+
+    def ingest_chain(self, ledger: ReceiptLedger) -> None:
+        """Ingest a single execution chain (receipt ledger)."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not ledger or not ledger.receipts:
+            return
+
+        # DEBUG: Log what we're ingesting
+        logger.debug(f"[PHASE3_DEBUG] Ingesting chain with {len(ledger.receipts)} receipts")
+        
+        self.tracer.ingest_receipts(ledger)
+
+        chain_ops = [r.op_id for r in ledger.receipts]
+        success = all(r.C_after < r.C_before + 0.1 for r in ledger.receipts)
+
+        # DEBUG: Log success calculation
+        for r in ledger.receipts:
+            debt_contrib = r.C_after - r.C_before
+            logger.debug(f"[PHASE3_DEBUG]   Receipt op_id={r.op_id}: C_before={r.C_before:.4f}, C_after={r.C_after:.4f}, debt_contrib={debt_contrib:.4f}")
+        
+        logger.debug(f"[PHASE3_DEBUG] Chain success: {success}")
+
+        self.training_chains_ops.append(chain_ops)
+        self.training_labels.append(1 if success else 0)
+        self.new_chains_since_update += 1
+
+        if len(self.training_chains_ops) > self.max_training_chains:
+            overflow = len(self.training_chains_ops) - self.max_training_chains
+            self.training_chains_ops = self.training_chains_ops[overflow:]
+            self.training_labels = self.training_labels[overflow:]
+
+    def update_models(self, min_new_chains: int = 1) -> Dict[str, Any]:
+        """Update embeddings and predictor when new data arrives."""
+        if self.new_chains_since_update < min_new_chains:
+            return {"updated": False, "reason": "insufficient_new_data"}
+
+        self.operator_embeddings = self.embedding_learner.train(self.tracer)
+
+        chain_embeddings = []
+        labels = []
+        for chain_ops, label in zip(self.training_chains_ops, self.training_labels):
+            try:
+                chain_embeddings.append([
+                    self.operator_embeddings[op_id].embedding for op_id in chain_ops
+                ])
+                labels.append(label)
+            except KeyError:
+                continue
+
+        metrics = self.predictor.train(chain_embeddings, labels, epochs=self.retrain_epochs)
+        self.new_chains_since_update = 0
+
+        if self.model_dir:
+            self.save_state(self.model_dir)
+
+        return {"updated": True, "metrics": metrics, "chains": len(labels)}
+
+    def predict_chain(self, chain_ops: List[int]) -> float:
+        """Predict success probability for a chain of op ids."""
+        if not chain_ops or not self.operator_embeddings:
+            return 0.5
+
+        chain_embeddings = [
+            self.operator_embeddings[op_id].embedding
+            for op_id in chain_ops
+            if op_id in self.operator_embeddings
+        ]
+        return self.predictor.predict(chain_embeddings)
+
+    def save_state(self, model_dir: str) -> None:
+        """Persist embeddings and predictor to disk."""
+        os.makedirs(model_dir, exist_ok=True)
+        embeddings_path = os.path.join(model_dir, "embeddings.json")
+        model_path = os.path.join(model_dir, "success_predictor")
+
+        self.embedding_learner.operator_embeddings = self.operator_embeddings
+        self.embedding_learner.save_embeddings(embeddings_path)
+        self.predictor.save_model(model_path)
+
+    def load_state(self, model_dir: str) -> None:
+        """Load embeddings and predictor from disk if available."""
+        embeddings_path = os.path.join(model_dir, "embeddings.json")
+        model_path = os.path.join(model_dir, "success_predictor")
+
+        self.embedding_learner.load_embeddings(embeddings_path)
+        self.operator_embeddings = self.embedding_learner.operator_embeddings
+        self.predictor.load_model(model_path)
+
+
 # -----------------------------
 # Complete NPE v2.0 with All Upgrades
 # -----------------------------
@@ -1076,7 +1727,8 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
                  gate_config: GateConfig = None,
                  synthesizer: BeamSearchSynthesizer = None,
                  beam_width: int = 5,
-                 max_synthesis_depth: int = 8):
+                 max_synthesis_depth: int = 8,
+                 adaptive_learner: Optional[AdaptiveLearningLoop] = None):
         
         super().__init__(registry, binding, templates, coherence_gate, weights)
         
@@ -1099,6 +1751,9 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
         
         # Receipt ledger
         self.ledger = ReceiptLedger()
+
+        # Optional online learning loop
+        self.adaptive_learner = adaptive_learner
         
         # Event counter for receipt IDs
         self.event_counter = 0
@@ -1136,7 +1791,8 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
             gate_result, _ = self.gate_config.evaluate(metrics)
             
             # Emit operator receipts for each node
-            self._emit_receipts(module, metrics, chain_cost)
+            chain_ledger = ReceiptLedger()
+            self._emit_receipts(module, metrics, chain_cost, chain_ledger)
             
             # Create proposal receipt
             proposal_receipt = ProposalReceipt(
@@ -1169,7 +1825,21 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
             self.prev_hash = proposal_receipt.digest
             
             results.append((module, proposal_receipt, metrics))
+
+            if self.adaptive_learner:
+                self.adaptive_learner.ingest_chain(chain_ledger)
         
+        if self.adaptive_learner:
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # DEBUG: Log retraining frequency
+            logger.debug(f"[PHASE3_DEBUG] Retraining triggered: new_chains_since_update={self.adaptive_learner.new_chains_since_update}")
+            
+            update_result = self.adaptive_learner.update_models(min_new_chains=1)
+            
+            logger.debug(f"[PHASE3_DEBUG] Retraining result: {update_result}")
+
         # Sort by debt (lower is better)
         results.sort(key=lambda x: x[1].debt)
         
@@ -1221,12 +1891,20 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
     def _emit_receipts(self,
                        module: Module,
                        metrics: CoherenceMetrics,
-                       chain_cost: float) -> None:
+                       chain_cost: float,
+                       chain_ledger: Optional[ReceiptLedger] = None) -> None:
         """Emit OperatorReceipt for each APPLY node."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         self.event_counter += 1
         
+        # Compute final coherence for the chain
         C_before = 0.0
         C_after, _ = self.debt_functional.compute(metrics)
+        
+        # DEBUG: Log coherence values for validation
+        logger.debug(f"[PHASE3_DEBUG] Chain {module.module_id}: C_after={C_after:.4f}")
         
         for node in module.nodes:
             if node.kind == "APPLY":
@@ -1248,9 +1926,15 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
                     registry_version=self.registry.version
                 )
                 
-                # Add to ledger
+                # DEBUG: Log the C_before/C_after values for each operator
+                logger.debug(f"[PHASE3_DEBUG]   Op {receipt.op_id}: C_before={receipt.C_before:.4f}, C_after={receipt.C_after:.4f}, debt_contrib={receipt.C_after - receipt.C_before:.4f}")
+                
+                # Add to ledgers
                 prev_hash = self.ledger.hash_chain[-1] if self.ledger.hash_chain else None
                 self.ledger.add_receipt(receipt, prev_hash)
+                if chain_ledger is not None:
+                    chain_prev = chain_ledger.hash_chain[-1] if chain_ledger.hash_chain else None
+                    chain_ledger.add_receipt(receipt, chain_prev)
                 
                 C_before = C_after
 

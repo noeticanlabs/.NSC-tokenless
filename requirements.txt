@@ -7,3 +7,8 @@ Flask
 numpy
 scipy
 matplotlib
+
+# Optional ML dependencies for NPE Phase 2 (embeddings/predictor).
+# The runtime will fall back to lightweight heuristics if these are absent.
+tensorflow
+scikit-learn
