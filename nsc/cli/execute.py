@@ -5,12 +5,22 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+import click
 
-def execute_command(args) -> int:
+from nsc.runtime.interpreter import Interpreter, ExecutionContext
+from nsc.runtime.environment import Environment
+from nsc.npe_v1_0 import OperatorRegistry, KernelBinding
+
+
+@click.command()
+@click.argument('module', type=click.Path(exists=True))
+@click.option('--registry', '-r', type=click.Path(exists=True), help='Path to operator registry')
+@click.option('--json-output', '-j', 'json_output', is_flag=True, help='Output as JSON')
+def execute_command(module, registry, json_output):
     """Execute an NSC module with full receipt emission."""
     try:
-        module_path = Path(args.module)
-        registry_path = getattr(args, "registry", None)
+        module_path = Path(module)
+        registry_path = registry
         
         # Load module
         with open(module_path) as f:
@@ -33,47 +43,57 @@ def execute_command(args) -> int:
                 ]
             }
         
-        # Import runtime components
-        from nsc.runtime.interpreter import Interpreter
-        from nsc.runtime.environment import Environment
+        # Setup kernels in the binding
+        # (Kernels are handled by the Interpreter through the Executor)
         
-        # Create environment
-        env = Environment(registry=registry)
+        # Convert registry to OperatorRegistry and KernelBinding
+        ops = registry.get("operators", [])
+        op_dict = {op["op_id"]: {"name": op["name"]} for op in ops}
+        nsc_registry = OperatorRegistry(
+            registry_id=registry.get("registry_id", "default"),
+            version=registry.get("version", "1.0"),
+            ops=op_dict
+        )
+        nsc_binding = KernelBinding(
+            binding_id="default",
+            registry_id=registry.get("registry_id", "default"),
+            bindings={}
+        )
         
-        # Setup default kernels
-        env.kernels = {
-            "kernel_add": lambda a, b: a + b,
-            "kernel_sub": lambda a, b: a - b,
-            "kernel_mul": lambda a, b: a * b,
-            "kernel_div": lambda a, b: a / b if b != 0 else float('inf'),
-        }
+        # Create execution context
+        ctx = ExecutionContext(
+            module=module,
+            module_digest="",
+            registry_id=registry.get("registry_id", "default"),
+            registry_version=registry.get("version", "1.0"),
+            binding_id="default"
+        )
         
         # Create interpreter and execute
-        interpreter = Interpreter(env=env)
-        result = interpreter.interpret(module)
+        interpreter = Interpreter(registry=nsc_registry, binding=nsc_binding)
+        result = interpreter.interpret(ctx)
         
         # Output results
         output = {
             "success": result.success,
-            "module_id": module.get("module_id"),
+            "module_id": result.module_id,
             "execution_time_ms": result.execution_time_ms,
         }
         
         if result.success:
-            output["results"] = result.results
+            output["results"] = result.entrypoint_result
             output["receipts_count"] = len(result.receipts) if result.receipts else 0
-            output["braid_events_count"] = len(result.braid_events) if result.braid_events else 0
+            output["errors"] = result.errors
             
-            if getattr(args, "json", False):
+            if json_output:
                 print(json.dumps(output, indent=2))
             else:
                 print(f"✓ Execution successful")
                 print(f"  Module: {module.get('module_id')}")
                 print(f"  Execution time: {result.execution_time_ms:.2f}ms")
                 print(f"  Receipts: {output['receipts_count']}")
-                print(f"  Braid events: {output['braid_events_count']}")
         else:
-            output["error"] = result.error
+            output["errors"] = result.errors
             print(json.dumps(output, indent=2), file=sys.stderr)
             return 1
         

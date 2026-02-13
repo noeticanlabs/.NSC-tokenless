@@ -15,6 +15,9 @@ except ImportError:
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+# Path to real example modules
+EXAMPLE_MODULES_PATH = project_root / "nsc" / "examples" / "modules"
+
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="FastAPI not available")
 class TestValidateEndpoint:
@@ -75,34 +78,36 @@ class TestExecuteEndpoint:
         return TestClient(app)
 
     def test_execute_minimal_module(self, client):
-        """Test executing a minimal module."""
-        module = {
-            "module_id": "test",
-            "nodes": [{"id": 1, "kind": "FIELD_REF"}],
-            "seq": [1],
-            "entrypoints": [1]
-        }
+        """Test executing a minimal module using real example."""
+        # Use real example module
+        module_path = EXAMPLE_MODULES_PATH / "psi_minimal.tokenless.json"
+        with open(module_path) as f:
+            module = json.load(f)
         
         response = client.post("/api/v1/execute", json={"module": module})
-        assert response.status_code == 200
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         data = response.json()
         assert "success" in data
         assert "execution_time_ms" in data
         assert "module_id" in data
 
     def test_execute_with_registry(self, client):
-        """Test executing with custom registry."""
-        module = {
-            "module_id": "test",
-            "nodes": [{"id": 1, "kind": "FIELD_REF"}],
-            "seq": [1],
-            "entrypoints": [1]
-        }
+        """Test executing with custom registry using real example."""
+        # Use real example module
+        module_path = EXAMPLE_MODULES_PATH / "psi_minimal.tokenless.json"
+        with open(module_path) as f:
+            module = json.load(f)
+        
         registry = {
-            "registry_id": "custom",
+            "registry_id": "noetican.nsc.registry.v1",
             "version": "1.0",
             "operators": [
-                {"op_id": 1001, "name": "ADD"}
+                {"op_id": 10, "name": "IDENTITY"},
+                {"op_id": 11, "name": "SCALE"},
+                {"op_id": 12, "name": "NEGATE"},
+                {"op_id": 13, "name": "ADD"},
+                {"op_id": 14, "name": "SUB"},
+                {"op_id": 20, "name": "INTEGRATE"}
             ]
         }
         
@@ -110,7 +115,7 @@ class TestExecuteEndpoint:
             "module": module,
             "registry": registry
         })
-        assert response.status_code == 200
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
 
 @pytest.mark.skipif(not HAS_FASTAPI, reason="FastAPI not available")

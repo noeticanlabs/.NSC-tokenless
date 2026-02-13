@@ -96,16 +96,15 @@ async def execute_module(request: ExecuteRequest):
                 success=True,
                 module_id=request.module.get("module_id"),
                 execution_time_ms=execution_time,
-                results=result.results,
-                receipts_count=len(result.receipts) if result.receipts else 0,
-                braid_events_count=len(result.braid_events) if result.braid_events else 0
+                results=result.entrypoint_result,
+                receipts_count=len(result.receipts) if result.receipts else 0
             )
         else:
             return ExecuteResponse(
                 success=False,
                 module_id=request.module.get("module_id"),
                 execution_time_ms=execution_time,
-                error=result.error
+                error=", ".join(result.errors) if result.errors else "Unknown error"
             )
             
     except Exception as e:

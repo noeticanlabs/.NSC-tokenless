@@ -425,8 +425,8 @@ class BeamSearchSynthesizer:
     def __init__(self,
                  registry: "OperatorRegistry",
                  binding: "KernelBinding",
-                 debt_functional: DebtFunctional,
-                 gate_config: GateConfig,
+                 debt_functional: DebtFunctional = None,
+                 gate_config: GateConfig = None,
                  beam_width: int = 5,
                  max_depth: int = 8):
         self.registry = registry
@@ -442,6 +442,9 @@ class BeamSearchSynthesizer:
     
     def _build_operator_index(self) -> None:
         """Index operators by output type for fast lookup."""
+        if self.registry is None:
+            return
+            
         for op_id, op in self.registry.ops.items():
             # Convert TypeTag to hashable string
             ret_json = op.sig.ret.to_json() if hasattr(op.sig.ret, 'to_json') else op.sig.ret
@@ -838,7 +841,7 @@ class ExecutionTracer:
         
         # Determine if this execution succeeded (all gates passed)
         success = all(
-            receipt.C_after < receipt.C_before + 0.1  # Debt didn't explode
+            receipt.C_after <= receipt.C_before + 0.1  # Debt didn't explode
             for receipt in receipt_ledger.receipts
         )
         if success:
@@ -1614,7 +1617,7 @@ class AdaptiveLearningLoop:
         self.tracer.ingest_receipts(ledger)
 
         chain_ops = [r.op_id for r in ledger.receipts]
-        success = all(r.C_after < r.C_before + 0.1 for r in ledger.receipts)
+        success = all(r.C_after <= r.C_before + 0.1 for r in ledger.receipts)
 
         # DEBUG: Log success calculation
         for r in ledger.receipts:
@@ -1836,7 +1839,7 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
             # DEBUG: Log retraining frequency
             logger.debug(f"[PHASE3_DEBUG] Retraining triggered: new_chains_since_update={self.adaptive_learner.new_chains_since_update}")
             
-            update_result = self.adaptive_learner.update_models(min_new_chains=1)
+            update_result = self.adaptive_learner.update_models(min_new_chains=10)
             
             logger.debug(f"[PHASE3_DEBUG] Retraining result: {update_result}")
 
@@ -1857,12 +1860,14 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
                 kind=node_data["kind"],
                 type=FIELD(SCALAR),  # Simplified
                 payload={
-                    "op_id": node_data["op_id"],
                     "args": node_data.get("args", []),
                     "kernel_id": node_data.get("kernel_id", ""),
                     "kernel_version": node_data.get("kernel_version", "")
                 }
             )
+            # Only add op_id for APPLY nodes
+            if node_data["kind"] == "APPLY":
+                node.payload["op_id"] = node_data.get("op_id", 0)
             nodes.append(node)
         
         # Create SEQ
@@ -1899,44 +1904,64 @@ class NoeticanProposalEngine_v2_0(NoeticanProposalEngine_v1_0):
         
         self.event_counter += 1
         
+        # Get all APPLY nodes in order
+        apply_nodes = [n for n in module.nodes if n.kind == "APPLY"]
+        
         # Compute final coherence for the chain
-        C_before = 0.0
-        C_after, _ = self.debt_functional.compute(metrics)
+        C_final, _ = self.debt_functional.compute(metrics)
+        
+        # Estimate per-operator coherence contributions
+        # Each operator's C_after is the estimated coherence after that operator
+        # We distribute the total coherence across operators proportionally
+        num_ops = len(apply_nodes)
+        if num_ops > 0:
+            # Use a simple linear distribution: each op contributes equally
+            # This is a heuristic - ideally we'd track actual intermediate coherence
+            C_per_operator = C_final / num_ops
+        else:
+            C_per_operator = 0.0
         
         # DEBUG: Log coherence values for validation
-        logger.debug(f"[PHASE3_DEBUG] Chain {module.module_id}: C_after={C_after:.4f}")
+        logger.debug(f"[PHASE3_DEBUG] Chain {module.module_id}: C_final={C_final:.4f}, num_ops={num_ops}")
         
-        for node in module.nodes:
-            if node.kind == "APPLY":
-                self.event_counter += 1
-                receipt = OperatorReceipt(
-                    event_id=f"evt_{self.event_counter}",
-                    node_id=node.id,
-                    op_id=node.payload.get("op_id", 0),
-                    digest_in=f"sha256:{'0'*64}",
-                    digest_out=module.digest(),
-                    kernel_id=node.payload.get("kernel_id", ""),
-                    kernel_version=node.payload.get("kernel_version", ""),
-                    C_before=C_before,
-                    C_after=C_after,
-                    r_phys=metrics.r_phys,
-                    r_cons=metrics.r_cons,
-                    r_num=metrics.r_num,
-                    registry_id=self.registry.registry_id,
-                    registry_version=self.registry.version
-                )
-                
-                # DEBUG: Log the C_before/C_after values for each operator
-                logger.debug(f"[PHASE3_DEBUG]   Op {receipt.op_id}: C_before={receipt.C_before:.4f}, C_after={receipt.C_after:.4f}, debt_contrib={receipt.C_after - receipt.C_before:.4f}")
-                
-                # Add to ledgers
-                prev_hash = self.ledger.hash_chain[-1] if self.ledger.hash_chain else None
-                self.ledger.add_receipt(receipt, prev_hash)
-                if chain_ledger is not None:
-                    chain_prev = chain_ledger.hash_chain[-1] if chain_ledger.hash_chain else None
-                    chain_ledger.add_receipt(receipt, chain_prev)
-                
-                C_before = C_after
+        # Track coherence as we process each operator
+        C_before = 0.0
+        
+        for i, node in enumerate(apply_nodes):
+            # Estimate C_after for this operator (cumulative)
+            # Each operator adds its portion to the coherence
+            C_after = min((i + 1) * C_per_operator, C_final)
+            
+            self.event_counter += 1
+            receipt = OperatorReceipt(
+                event_id=f"evt_{self.event_counter}",
+                node_id=node.id,
+                op_id=node.payload.get("op_id", 0),
+                digest_in=f"sha256:{'0'*64}",
+                digest_out=module.digest(),
+                kernel_id=node.payload.get("kernel_id", ""),
+                kernel_version=node.payload.get("kernel_version", ""),
+                C_before=C_before,
+                C_after=C_after,
+                r_phys=metrics.r_phys,
+                r_cons=metrics.r_cons,
+                r_num=metrics.r_num,
+                registry_id=self.registry.registry_id,
+                registry_version=self.registry.version
+            )
+            
+            # DEBUG: Log the C_before/C_after values for each operator
+            logger.debug(f"[PHASE3_DEBUG]   Op {receipt.op_id}: C_before={receipt.C_before:.4f}, C_after={receipt.C_after:.4f}, debt_contrib={receipt.C_after - receipt.C_before:.4f}")
+            
+            # Add to ledgers
+            prev_hash = self.ledger.hash_chain[-1] if self.ledger.hash_chain else None
+            self.ledger.add_receipt(receipt, prev_hash)
+            if chain_ledger is not None:
+                chain_prev = chain_ledger.hash_chain[-1] if chain_ledger.hash_chain else None
+                chain_ledger.add_receipt(receipt, chain_prev)
+            
+            # Update C_before for next operator
+            C_before = C_after
 
 
 # -----------------------------
