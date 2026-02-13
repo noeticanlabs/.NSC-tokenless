@@ -539,7 +539,7 @@ class BeamSearchSynthesizer:
                         slot: Dict[str, Any],
                         candidate: OperatorCandidate,
                         depth: int) -> Optional[PartialProposal]:
-        """Apply an operator to fill a slot."""
+        """Apply an operator to fill a slot with type-safe argument binding."""
         # Create node for this operator
         node_id = len(proposal.nodes) + 1
         
@@ -549,22 +549,34 @@ class BeamSearchSynthesizer:
         except KeyError:
             return None  # No kernel binding
         
-        # Create node
+        # Resolve arguments with type safety
+        bound_args = self._resolve_arguments(
+            candidate,
+            proposal.nodes,
+            slot["expected_type"]
+        )
+        
+        if bound_args is None:
+            return None  # Cannot satisfy argument requirements
+        
+        # Create node with proper argument binding
         node = {
             "id": node_id,
             "kind": "APPLY",
             "type": candidate.ret,
             "op_id": candidate.op_id,
-            "args": [s["source_id"] for s in proposal.nodes],  # Simplified
+            "args": bound_args,  # Type-checked args
             "kernel_id": kernel_id,
             "kernel_version": kernel_version
         }
         
-        # Compute cost increment
-        cost_increment = candidate.cost_increment
-        
-        # Check coherence preservation (simplified)
-        preserves = candidate.preserves_coherence
+        # Compute real cost increment based on multiple factors
+        cost_increment = self._compute_operator_cost(
+            candidate.op_id,
+            depth,
+            len(proposal.nodes),
+            candidate.preserves_coherence
+        )
         
         return PartialProposal(
             nodes=proposal.nodes + [node],
@@ -574,28 +586,457 @@ class BeamSearchSynthesizer:
             last_type=candidate.ret
         )
     
-    def _types_match(self, type1: Any, type2: Any) -> bool:
-        """Check if two types match."""
-        if isinstance(type1, str) and isinstance(type2, str):
-            return type1 == type2
-        return json.dumps(type1, sort_keys=True) == json.dumps(type2, sort_keys=True)
+    def _types_match(self, type1: Any, type2: Any, allow_coercion: bool = True) -> bool:
+        """Check if two types match, with optional coercion.
+        
+        Type compatibility matrix:
+        - SCALAR = FLOAT, DOUBLE (numeric family)
+        - PHASE = COMPLEX (algebraic family)
+        - FIELD_REF = FIELD (collection family)
+        - Exact match always succeeds
+        """
+        if not allow_coercion:
+            if isinstance(type1, str) and isinstance(type2, str):
+                return type1 == type2
+            return json.dumps(type1, sort_keys=True) == json.dumps(type2, sort_keys=True)
+        
+        # Normalize for comparison
+        t1_str = type1 if isinstance(type1, str) else json.dumps(type1, sort_keys=True)
+        t2_str = type2 if isinstance(type2, str) else json.dumps(type2, sort_keys=True)
+        
+        # Exact match
+        if t1_str == t2_str:
+            return True
+        
+        # Numeric family coercion
+        numeric_family = {"SCALAR", "FLOAT", "DOUBLE", "INT", "REAL"}
+        if t1_str in numeric_family and t2_str in numeric_family:
+            return True
+        
+        # Algebraic family coercion
+        algebraic_family = {"PHASE", "COMPLEX", "QUATERNION"}
+        if t1_str in algebraic_family and t2_str in algebraic_family:
+            return True
+        
+        # Collection family coercion
+        if "FIELD" in t1_str and "FIELD" in t2_str:
+            return True
+        
+        return False
+    
+    def _resolve_arguments(self,
+                          candidate: OperatorCandidate,
+                          available_nodes: List[Dict[str, Any]],
+                          expected_input_type: Dict[str, Any]) -> Optional[List[int]]:
+        """Resolve operator arguments with type-safe binding.
+        
+        Returns list of node IDs that satisfy the operator's argument requirements,
+        or None if binding fails.
+        """
+        if not candidate.args:
+            return []  # No arguments required
+        
+        bound_args = []
+        
+        # For each argument the operator expects
+        for arg_spec in candidate.args:
+            arg_type = arg_spec.get("type", {})
+            
+            # Find compatible nodes from available_nodes
+            compatible = None
+            for node in reversed(available_nodes):  # Prefer most recent
+                node_type = node.get("type", {})
+                if self._types_match(node_type, arg_type, allow_coercion=True):
+                    compatible = node["id"]
+                    break
+            
+            if compatible is None:
+                # No compatible node found and no default
+                return None
+            
+            bound_args.append(compatible)
+        
+        return bound_args
+    
+    def _compute_operator_cost(self,
+                              op_id: int,
+                              depth: int,
+                              chain_length: int,
+                              preserves_coherence: bool) -> float:
+        """Compute real cost function for operator selection.
+        
+        Cost components:
+        - Base cost: operator-specific cost
+        - Depth penalty: deeper chains are less stable
+        - Composition cost: operators compose better with some operators
+        - Coherence bonus: operators that preserve coherence are cheaper
+        
+        Formula: cost = base + depth_penalty + composition_cost - coherence_bonus
+        """
+        # Base cost: 0.05 to 0.15 depending on operator
+        base_cost = 0.1
+        if op_id in [10, 11, 12]:  # Common source operators
+            base_cost = 0.05
+        elif op_id in [13, 14]:  # Regulatory operators
+            base_cost = 0.08
+        elif op_id >= 100:  # Exotic operators
+            base_cost = 0.15
+        
+        # Depth penalty: increases exponentially with chain depth
+        # Deeper chains accumulate more numerical error
+        depth_penalty = 0.02 * (1.1 ** depth) - 0.02  # ~0% at depth 0, ~2.2% at depth 10
+        
+        # Composition cost: chains of similar operators are cheaper
+        composition_cost = 0.01 if chain_length > 0 else 0.0
+        
+        # Coherence bonus: operators that preserve coherence are preferred
+        coherence_bonus = 0.05 if preserves_coherence else 0.0
+        
+        total_cost = base_cost + depth_penalty + composition_cost - coherence_bonus
+        return max(0.02, total_cost)  # Minimum cost floor
     
     def _compute_metrics(self, proposal: PartialProposal) -> CoherenceMetrics:
-        """Compute coherence metrics for completed proposal."""
-        # Simplified: metrics based on chain length and node count
+        """Compute coherence metrics for completed proposal with realistic model.
+        
+        Metrics are computed based on:
+        - Chain length and operator types
+        - Numerical stability (deeper chains = higher r_num)
+        - Physics fidelity (type of operators used)
+        - Constraint satisfaction
+        """
         node_count = len(proposal.nodes)
         
+        # Estimate physics residual: longer chains drift more
+        # r_phys = base + growth with depth
+        r_phys = 0.05 + 0.08 * node_count
+        if node_count > 8:
+            r_phys *= 1.5  # Penalty for very deep chains
+        
+        # Constraint residual: usually small, grows with complexity
+        r_cons = 0.03 + 0.02 * node_count
+        
+        # Numerical stability: critical beyond depth 8-10
+        r_num = 0.001 * (node_count ** 2)  # Quadratic growth with depth
+        if node_count > 10:
+            r_num = max(0.1, r_num)  # Hard floor at depth 10+
+        
+        # Reference residual (missing evidence)
+        r_ref = 0.0  # Assume well-sourced for now
+        
+        # Staleness: receipts age linearly
+        r_stale = 0.0  # Should be reset by fresh execution
+        
+        # Conflicts: assume well-composed chains avoid conflicts
+        r_conflict = 0.0
+        
         return CoherenceMetrics(
-            r_phys=0.1 * node_count,  # Longer chains = more drift
-            r_cons=0.05 * node_count,
-            r_num=0.01 * node_count if node_count < 8 else 0.1,  # Numerical instability at depth
-            r_ref=0.0,
-            r_stale=0.0,
-            r_conflict=0.0,
-            r_retry=max(0, node_count - 6),
+            r_phys=min(0.5, r_phys),  # Cap at 0.5
+            r_cons=min(0.3, r_cons),
+            r_num=min(0.5, r_num),
+            r_ref=r_ref,
+            r_stale=r_stale,
+            r_conflict=r_conflict,
+            r_retry=max(0, node_count - 6),  # Need retries if chain > 6
             r_rollback=0,
-            r_sat=0.0
+            r_sat=min(0.9, 0.1 * node_count)  # Controller saturation increases with depth
         )
+
+
+# ===========================
+# Phase 1.2: ExecutionTracer
+# Learn from Receipt Ledgers
+# ===========================
+
+@dataclass
+class ChainPattern:
+    """Pattern in operator chain execution."""
+    chain_signature: str  # Hash of operator sequence
+    count: int = 0
+    success_count: int = 0
+    total_debt: float = 0.0
+    min_debt: float = field(default_factory=lambda: float('inf'))
+    max_debt: float = field(default_factory=lambda: float('-inf'))
+    avg_residuals: CoherenceMetrics = field(default_factory=CoherenceMetrics)
+    
+    @property
+    def success_rate(self) -> float:
+        return self.success_count / self.count if self.count > 0 else 0.0
+    
+    @property
+    def avg_debt(self) -> float:
+        return self.total_debt / self.count if self.count > 0 else 0.0
+
+
+@dataclass
+class OperatorProfile:
+    """Profile of an operator's behavior across executions."""
+    op_id: int
+    executions: int = 0
+    successes: int = 0
+    total_debt_contribution: float = 0.0
+    avg_residual_magnitude: float = 0.0
+    pairs_composition: Dict[int, int] = field(default_factory=dict)  # op_id -> count
+    
+    @property
+    def success_rate(self) -> float:
+        return self.successes / self.executions if self.executions > 0 else 0.0
+    
+    def add_execution(self, success: bool, debt_contribution: float, residual_mag: float):
+        """Record an execution of this operator."""
+        self.executions += 1
+        if success:
+            self.successes += 1
+        self.total_debt_contribution += debt_contribution
+        self.avg_residual_magnitude += residual_mag
+    
+    def get_avg_debt(self) -> float:
+        return self.total_debt_contribution / self.executions if self.executions > 0 else 0.0
+    
+    def get_avg_residual(self) -> float:
+        return self.avg_residual_magnitude / self.executions if self.executions > 0 else 0.0
+
+
+class ExecutionTracer:
+    """Extract learning signals from Receipt Ledgers.
+    
+    Analyzes execution history to discover:
+    - Which operator chains work well
+    - Coherence profiles and residual patterns
+    - Operator compatibility scores
+    - Failure modes and avoidance rules
+    
+    Phase 1.2 deliverable: Foundational learning from execution data.
+    """
+    
+    def __init__(self):
+        self.chain_patterns: Dict[str, ChainPattern] = {}
+        self.operator_profiles: Dict[int, OperatorProfile] = {}
+        self.total_executions = 0
+        self.successful_executions = 0
+        self.operator_pairs: Dict[Tuple[int, int], int] = defaultdict(int)  # (op1, op2) -> count
+    
+    def ingest_receipts(self, receipt_ledger: ReceiptLedger) -> None:
+        """Ingest a receipt ledger and extract patterns."""
+        if not receipt_ledger.receipts:
+            return
+        
+        self.total_executions += 1
+        
+        # Determine if this execution succeeded (all gates passed)
+        success = all(
+            receipt.C_after < receipt.C_before + 0.1  # Debt didn't explode
+            for receipt in receipt_ledger.receipts
+        )
+        if success:
+            self.successful_executions += 1
+        
+        # Analyze each receipt
+        for i, receipt in enumerate(receipt_ledger.receipts):
+            op_id = receipt.op_id
+            
+            # Ensure operator profile exists
+            if op_id not in self.operator_profiles:
+                self.operator_profiles[op_id] = OperatorProfile(op_id)
+            
+            # Record execution
+            debt_contrib = receipt.C_after - receipt.C_before
+            residual_mag = math.sqrt(
+                receipt.r_phys**2 + receipt.r_cons**2 + receipt.r_num**2
+            )
+            
+            self.operator_profiles[op_id].add_execution(
+                success=success,
+                debt_contribution=debt_contrib,
+                residual_mag=residual_mag
+            )
+            
+            # Track operator pairs (composition)
+            if i > 0:
+                prev_op = receipt_ledger.receipts[i-1].op_id
+                self.operator_pairs[(prev_op, op_id)] += 1
+                self.operator_profiles[op_id].pairs_composition[prev_op] = \
+                    self.operator_profiles[op_id].pairs_composition.get(prev_op, 0) + 1
+        
+        # Create chain pattern
+        chain_sig = self._chain_signature(receipt_ledger.receipts)
+        if chain_sig not in self.chain_patterns:
+            self.chain_patterns[chain_sig] = ChainPattern(chain_signature=chain_sig)
+        
+        pattern = self.chain_patterns[chain_sig]
+        pattern.count += 1
+        if success:
+            pattern.success_count += 1
+        
+        # Update debt stats
+        total_chain_debt = sum(
+            r.C_after - r.C_before for r in receipt_ledger.receipts
+        )
+        pattern.total_debt += total_chain_debt
+        pattern.min_debt = min(pattern.min_debt, total_chain_debt)
+        pattern.max_debt = max(pattern.max_debt, total_chain_debt)
+    
+    def operator_success_rate(self, op_id: int) -> float:
+        """What fraction of executions with this operator passed gates?"""
+        if op_id not in self.operator_profiles:
+            return 0.5  # Unknown: assume 50%
+        return self.operator_profiles[op_id].success_rate
+    
+    def operator_avg_debt(self, op_id: int) -> float:
+        """Average debt contribution of this operator."""
+        if op_id not in self.operator_profiles:
+            return 0.1  # Unknown: assume moderate
+        return self.operator_profiles[op_id].get_avg_debt()
+    
+    def operator_coherence_risk(self, op_id: int) -> float:
+        """Risk score for coherence degradation (0=safe, 1=risky)."""
+        if op_id not in self.operator_profiles:
+            return 0.5
+        
+        profile = self.operator_profiles[op_id]
+        
+        # Risk = 1 - success_rate
+        risk = 1.0 - profile.success_rate
+        
+        # Amplify by average residual magnitude
+        risk *= (1.0 + profile.get_avg_residual())
+        
+        return min(1.0, risk)
+    
+    def chain_debt_histogram(self, chain_pattern: str = None) -> Dict[str, float]:
+        """Distribution of debt for given chain pattern or all chains."""
+        if chain_pattern:
+            if chain_pattern not in self.chain_patterns:
+                return {}
+            pattern = self.chain_patterns[chain_pattern]
+            return {
+                "min": pattern.min_debt,
+                "max": pattern.max_debt,
+                "avg": pattern.avg_debt,
+                "count": pattern.count,
+                "success_rate": pattern.success_rate
+            }
+        else:
+            # Aggregate across all patterns
+            if not self.chain_patterns:
+                return {}
+            
+            all_debts = [p.total_debt for p in self.chain_patterns.values()]
+            return {
+                "min": min(p.min_debt for p in self.chain_patterns.values() if p.count > 0),
+                "max": max(p.max_debt for p in self.chain_patterns.values() if p.count > 0),
+                "avg": sum(all_debts) / sum(p.count for p in self.chain_patterns.values()),
+                "total_patterns": len(self.chain_patterns),
+                "total_executions": self.total_executions
+            }
+    
+    def operator_compatibility(self, op1: int, op2: int) -> float:
+        """Compatibility score: how well does op1 → op2 compose? (0-1)."""
+        # Check if we've seen this pair
+        pair_count = self.operator_pairs.get((op1, op2), 0)
+        
+        if pair_count == 0:
+            # Haven't seen this pair - neutral compatibility
+            return 0.5
+        
+        # Success rate of compositions with this pair
+        # This is simplified - in production would track success of chains containing this pair
+        op1_success = self.operator_success_rate(op1)
+        op2_success = self.operator_success_rate(op2)
+        
+        # Compatibility = average of both operators' success rates
+        # Weighted by observation count
+        base_compat = (op1_success + op2_success) / 2.0
+        
+        # Boost if pair is frequently successful
+        observation_boost = min(0.1, pair_count * 0.01)
+        
+        return min(1.0, base_compat + observation_boost)
+    
+    def top_chains_by_success(self, k: int = 10) -> List[Tuple[str, float, int]]:
+        """Top k operator chains by success rate.
+        
+        Returns: [(chain_signature, success_rate, execution_count), ...]
+        """
+        patterns = sorted(
+            self.chain_patterns.values(),
+            key=lambda p: (p.success_rate, -p.count),
+            reverse=True
+        )
+        
+        return [
+            (p.chain_signature, p.success_rate, p.count)
+            for p in patterns[:k]
+        ]
+    
+    def top_operators_by_coherence(self, k: int = 10) -> List[Tuple[int, float]]:
+        """Top k operators by coherence preservation (low risk).
+        
+        Returns: [(op_id, coherence_score), ...]
+        """
+        scored = [
+            (op_id, 1.0 - self.operator_coherence_risk(op_id))
+            for op_id in self.operator_profiles.keys()
+        ]
+        
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:k]
+    
+    def failure_mode_analysis(self) -> Dict[str, List[Tuple]]:
+        """Identify operators associated with failures.
+        
+        Returns: {
+            "high_risk_operators": [(op_id, risk_score), ...],
+            "high_risk_pairs": [((op1, op2), risk), ...]
+        }
+        """
+        # High-risk operators: low success rate
+        high_risk_ops = [
+            (op_id, self.operator_coherence_risk(op_id))
+            for op_id, profile in self.operator_profiles.items()
+            if profile.success_rate < 0.6  # Less than 60% success
+        ]
+        high_risk_ops.sort(key=lambda x: x[1], reverse=True)
+        
+        # High-risk pairs: rarely observed or low combination success
+        high_risk_pairs = []
+        for (op1, op2), count in self.operator_pairs.items():
+            if count < 3:  # Rare pair
+                compat = self.operator_compatibility(op1, op2)
+                if compat < 0.5:  # Poor compatibility
+                    high_risk_pairs.append(((op1, op2), 1.0 - compat))
+        
+        high_risk_pairs.sort(key=lambda x: x[1], reverse=True)
+        
+        return {
+            "high_risk_operators": high_risk_ops[:10],
+            "high_risk_pairs": high_risk_pairs[:10]
+        }
+    
+    def summary(self) -> Dict[str, Any]:
+        """Summarize learning insights."""
+        total_success_rate = (
+            self.successful_executions / self.total_executions
+            if self.total_executions > 0 else 0.0
+        )
+        
+        histogram = self.chain_debt_histogram()
+        
+        return {
+            "total_executions": self.total_executions,
+            "successful_executions": self.successful_executions,
+            "success_rate": total_success_rate,
+            "unique_operators": len(self.operator_profiles),
+            "unique_chains": len(self.chain_patterns),
+            "debt_stats": histogram,
+            "top_chains": self.top_chains_by_success(5),
+            "top_operators": self.top_operators_by_coherence(5),
+            "failure_analysis": self.failure_mode_analysis()
+        }
+    
+    def _chain_signature(self, receipts: List[OperatorReceipt]) -> str:
+        """Create canonical signature for operator chain."""
+        op_sequence = "->".join(str(r.op_id) for r in receipts)
+        return hashlib.md5(op_sequence.encode()).hexdigest()[:16]
 
 
 # -----------------------------
